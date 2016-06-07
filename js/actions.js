@@ -42,8 +42,34 @@ function extractBackground(n, m, background, image) {
     return binaryImage;
 }
 
-function skinDetection(image) {
+function backgroundAndSkinDetection(width, height, background, image) {
+    var binaryImage = new BinaryImage(height, width),
+        length = background.data.length;
+    for (var i = 0; i < length; i += 4) {
+        var backgroundPixel = new RGBPixel(background.data[i], background.data[i + 1], background.data[i + 2]),
+            imagePixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]);
+        var rowIndex = Math.floor((i / 4) / width);
 
+        if (rgbThreshold(THRESHOLD, backgroundPixel, imagePixel) && hsvThreshold(rgbToHsv(imagePixel))) {
+            binaryImage.data[rowIndex].push(true);
+        } else {
+            binaryImage.data[rowIndex].push(false);
+        }
+    }
+    return binaryImage;
+}
+
+function skinDetection(width, height, image) {
+    var binaryImage = new BinaryImage(height, width),
+        length = image.data.length;
+    for (var i = 0; i < length; i += 4) {
+        var rgbPixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]);
+        var hsvPixel = rgbToHsv(rgbPixel);
+        var rowIndex = Math.floor((i / 4) / width);
+
+        binaryImage.data[rowIndex].push(hsvThreshold(hsvPixel));
+    }
+    return binaryImage;
 }
 
 function findHand(image) {
@@ -62,12 +88,11 @@ function recognizeHand(video, width, height) {
     tempCanvas.getContext('2d').drawImage(video, 0, 0, width, height);
     imageData = tempCanvas.getContext('2d').getImageData(0, 0, width, height);
 
-    // backgroundContext = document.getElementById('backgroundCanvas').getContext('2d');
-    // backgroundContext.putImageData(BACKGROUND_DATA, 0, 0);
-    // foregroundContext = document.getElementById('foregroundCanvas').getContext('2d');
-    // foregroundContext.drawImage(video, 0, 0, width, height);
+    foregroundContext = document.getElementById('foregroundCanvas').getContext('2d');
+    foregroundContext.drawImage(video, 0, 0, width, height);
     destinationContext = document.getElementById('resultCanvas').getContext('2d');
-    result = extractBackground(height, width, BACKGROUND_DATA, imageData);
+    //result = extractBackground(height, width, BACKGROUND_DATA, imageData);
+    result = backgroundAndSkinDetection(width, height, BACKGROUND_DATA, imageData);
     printBinaryImage(result, width, height, destinationContext);
 }
 

@@ -12,3 +12,15 @@ function RGBPixel(red, blue, green) {
     this.blue = blue;
     this.green = green;
 }
+
+function HSVPixel(hue, saturation, value) {
+    while (hue <= 0) {
+        hue += 360;
+    }
+    while (hue > 360) {
+        hue -= 360;
+    }
+    this.h = hue;
+    this.s = saturation;
+    this.v = value;
+}
