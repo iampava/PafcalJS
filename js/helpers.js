@@ -65,8 +65,9 @@ function rgbThreshold(threshold, backgroundPixel, imagePixel) {
 }
 
 function printBinaryImage(image, width, height, context) {
-    var imageData = context.getImageData(0, 0, width, height);
-    for (var i = 0; i < imageData.data.length; i += 4) {
+    var imageData = context.getImageData(0, 0, width, height),
+        length = imageData.data.length;
+    for (var i = 0; i < length; i += 4) {
         var rowIndex = Math.floor(i / 4 / width);
         imageData.data[i + 3] = 255;
         imageData.data[i + 1] = image.data[rowIndex][((i / 4) - rowIndex * width) % width] ? 255 : 0;

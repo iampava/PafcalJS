@@ -8,20 +8,26 @@ function modelBackground(video, width, height) {
     var interval = setInterval(function() {
         iterations++;
         console.log(iterations);
-        if (iterations === 2) {
+        if (iterations === NUMBER_OF_BACKGROUND_ITERATIONS) {
             clearInterval(interval);
             myCanvas.getContext('2d').drawImage(video, 0, 0, width, height);
             BACKGROUND_DATA = myCanvas.getContext('2d').getImageData(0, 0, width, height);
-            recognizeHand(video, width, height)
+            console.log("DONE");
+            setTimeout(function() {
+                setInterval(function() {
+                    recognizeHand(video, width, height);
+                }, 1000 / RECOGNITIONS_PER_SECOND);
+            }, 2000);
         }
     }, 1000);
 }
 
 function extractBackground(n, m, background, image) {
-    var binaryImage = new BinaryImage(n, m);
-    for (var i = 0; i < background.length; i += 4) {
-        var backgroundPixel = new RGBPixel(background[i], background[i + 1], background[i + 2]),
-            imagePixel = new RGBPixel(image[i], image[i + 1], image[i + 2]);
+    var binaryImage = new BinaryImage(n, m),
+        length = background.data.length;
+    for (var i = 0; i < length; i += 4) {
+        var backgroundPixel = new RGBPixel(background.data[i], background.data[i + 1], background.data[i + 2]),
+            imagePixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]);
         var rowIndex = Math.floor((i / 4) / m);
 
         if (rgbThreshold(THRESHOLD, backgroundPixel, imagePixel)) {
@@ -56,16 +62,13 @@ function recognizeHand(video, width, height) {
     tempCanvas.getContext('2d').drawImage(video, 0, 0, width, height);
     imageData = tempCanvas.getContext('2d').getImageData(0, 0, width, height);
 
-    backgroundContext = document.getElementById('backgroundCanvas').getContext('2d');
-    backgroundContext.putImageData(BACKGROUND_DATA, 0, 0);
-    foregroundContext = document.getElementById('foregroundCanvas').getContext('2d');
-    foregroundContext.drawImage(video, 0, 0, width, height);
+    // backgroundContext = document.getElementById('backgroundCanvas').getContext('2d');
+    // backgroundContext.putImageData(BACKGROUND_DATA, 0, 0);
+    // foregroundContext = document.getElementById('foregroundCanvas').getContext('2d');
+    // foregroundContext.drawImage(video, 0, 0, width, height);
     destinationContext = document.getElementById('resultCanvas').getContext('2d');
     result = extractBackground(height, width, BACKGROUND_DATA, imageData);
     printBinaryImage(result, width, height, destinationContext);
-    // setInterval(function() {
-    //     recognizeHand(ctx, video, width, height);
-    // }, 500);
 }
 
 
