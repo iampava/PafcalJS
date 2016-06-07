@@ -1,6 +1,19 @@
+<!DOCTYPE html>
 <html>
-	<head> Test </head>
-	<body>
-		<p> My test body </p>
-	</body>
+
+<head>
+    <title> Method 1 - Background substraction & skin detection </title>
+</head>
+
+<!-- <body onload='recognizeHand(1280,720, "backgroundCanvas", "foregroundCanvas", "resultCanvas")'> -->
+<body onload='setUp(1280, 720)'>
+    <canvas id="resultCanvas" width="1280" height="720"></canvas>
+    <canvas id="backgroundCanvas" width="1280" height="720"></canvas>
+    <canvas id="foregroundCanvas" width="1280" height="720"></canvas>
+    <script type="text/javascript" src="js/constants.js"></script>
+    <script type="text/javascript" src="js/constructors.js"></script>
+    <script type="text/javascript" src="js/helpers.js"></script>
+    <script type="text/javascript" src="js/actions.js"></script>
+</body>
+
 </html>
