@@ -42,9 +42,50 @@ function extractBackground(m, n, background, image) {
     return binaryImage;
 }
 
+function rgbSkinDetection(pixel) {
+    var isSkin = false;
+
+    if ((pixel.red > 95) && (pixel.green > 40) && (pixel.blue > 20) && (rgbMax(pixel) - rgbMin(pixel) > 15) &&
+        (Math.abs(pixel.red - pixel.green) > 15) && (pixel.red > pixel.green) && (pixel.red > pixel.blue)) {
+        isSkin = true;
+    }
+
+    if ((pixel.red > 220) && (pixel.green > 210) && (pixel.blue > 170) && (Math.abs(pixel.red - pixel.green) <= 15) &&
+        (pixel.red > pixel.blue) && (pixel.green > pixel.blue)) {
+        isSkin = true;
+    }
+    return isSkin;
+}
+
+function hsvSkinDetection(pixel) {
+    if (isValueInRange(pixel.h, HSV_THRESHOLD.HUE) && isValueInRange(pixel.s, HSV_THRESHOLD.SATURATION) && isValueInRange(pixel.v, HSV_THRESHOLD.VALUE)) {
+        return true;
+    }
+    return false;
+}
+
+function cybSkinDetection(pixel) {
+    return true;
+}
+
+function extractSkin(width, height, image) {
+    var binaryImage = new BinaryImage(height, width),
+        length = image.data.length;
+    for (var i = 0; i < length; i += 4) {
+        var imagePixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]),
+            rowIndex = Math.floor((i / 4) / width);
+
+        if (rgbSkinDetection(imagePixel) && hsvSkinDetection(rgbToHsv(imagePixel))) {
+            binaryImage.data[rowIndex].push(true);
+        } else {
+            binaryImage.data[rowIndex].push(false);
+        }
+    }
+    return binaryImage;
+}
 
 
-function rbGaussianModel(width, height, image, context) {
+/*function rbGaussianModel(width, height, image, context) {
     var imageData = context.getImageData(0, 0, width, height),
         length = image.data.length;
     for (var i = 0; i < length; i += 4) {
@@ -56,17 +97,17 @@ function rbGaussianModel(width, height, image, context) {
         imageData.data[i + 0] = rbLikelihood(rbPixel);
     }
     context.putImageData(imageData, 0, 0);
-}
+}*/
 
 function backgroundAndSkinDetection(width, height, background, image) {
     var binaryImage = new BinaryImage(height, width),
-        length = background.data.length;
+        length = image.data.length;
     for (var i = 0; i < length; i += 4) {
         var backgroundPixel = new RGBPixel(background.data[i], background.data[i + 1], background.data[i + 2]),
-            imagePixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]);
-        var rowIndex = Math.floor((i / 4) / width);
+            imagePixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]),
+            rowIndex = Math.floor((i / 4) / width);
 
-        if (backgroundThreshold(THRESHOLD, backgroundPixel, imagePixel) && (cybThreshold(rgbTocyb(imagePixel)) || (hsvThreshold(rgbToHsv(imagePixel))))) {
+        if (backgroundThreshold(THRESHOLD, backgroundPixel, imagePixel) && rgbSkinDetection(imagePixel) && hsvSkinDetection(rgbToHsv(imagePixel))) {
             binaryImage.data[rowIndex].push(true);
         } else {
             binaryImage.data[rowIndex].push(false);
@@ -75,45 +116,6 @@ function backgroundAndSkinDetection(width, height, background, image) {
     return binaryImage;
 }
 
-function cybRgbSkinDetection(width, height, image) {
-    var binaryImage = new BinaryImage(height, width),
-        length = image.data.length;
-    for (var i = 0; i < length; i += 4) {
-        var rgbPixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]);
-        var hsvPixel = rgbToHsv(rgbPixel);
-        var cybPixel = rgbTocyb(rgbPixel);
-        var rowIndex = Math.floor((i / 4) / width);
-
-        binaryImage.data[rowIndex].push(hsvThreshold(hsvPixel) || cybThreshold(cybPixel));
-    }
-    return binaryImage;
-}
-
-function hsvSkinDetection(width, height, image) {
-    var binaryImage = new BinaryImage(height, width),
-        length = image.data.length;
-    for (var i = 0; i < length; i += 4) {
-        var rgbPixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]);
-        var hsvPixel = rgbToHsv(rgbPixel);
-        var rowIndex = Math.floor((i / 4) / width);
-
-        binaryImage.data[rowIndex].push(hsvThreshold(hsvPixel));
-    }
-    return binaryImage;
-}
-
-function cybSkinDetection(width, height, image) {
-    var binaryImage = new BinaryImage(height, width),
-        length = image.data.length;
-    for (var i = 0; i < length; i += 4) {
-        var rgbPixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]);
-        var cybPixel = rgbTocyb(rgbPixel);
-        var rowIndex = Math.floor((i / 4) / width);
-
-        binaryImage.data[rowIndex].push(cybThreshold(cybPixel));
-    }
-    return binaryImage;
-}
 
 function findHand(image) {
 
@@ -134,9 +136,7 @@ function recognizeHand(video, width, height) {
     foregroundContext = document.getElementById('foregroundCanvas').getContext('2d');
     foregroundContext.drawImage(video, 0, 0, width, height);
     destinationContext = document.getElementById('resultCanvas').getContext('2d');
-    // rbGaussianModel(width, height, imageData, destinationContext);
-    //result = backgroundAndSkinDetection(width, height, BACKGROUND_DATA, imageData);
-    result = hsvSkinDetection(width, height, imageData);
+    result = backgroundAndSkinDetection(width, height, BACKGROUND_DATA, imageData);
     printBinaryImage(result, width, height, destinationContext);
 }
 

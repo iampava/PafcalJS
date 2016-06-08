@@ -41,13 +41,6 @@ function isValueInRange(value, range) {
     return false;
 }
 
-function hsvThreshold(hsvPixel) {
-    if (isValueInRange(hsvPixel.h, HSV_THRESHOLD.HUE) && isValueInRange(hsvPixel.s, HSV_THRESHOLD.SATURATION) && isValueInRange(hsvPixel.v, HSV_THRESHOLD.VALUE)) {
-        return true;
-    }
-    return false;
-}
-
 function cybThreshold(cybPixel) {
     if (isValueInRange(cybPixel.cb, CYB_THRESHOLD.CB) && isValueInRange(cybPixel.cr, CYB_THRESHOLD.CR)) {
         return true;
@@ -67,4 +60,12 @@ function rbLikelihood(rbPixel) {
 
     likelihood = Math.pow(Math.E, rTemp * (rbPixel.r - mean) + bTemp * (rbPixel.b - mean));
     return likelihood;
+}
+
+function rgbMax(pixel) {
+    return Math.max(pixel.red, pixel.green, pixel.blue);
+}
+
+function rgbMin(pixel) {
+    return Math.min(pixel.red, pixel.green, pixel.blue);
 }
