@@ -24,3 +24,14 @@ function HSVPixel(hue, saturation, value) {
     this.s = saturation;
     this.v = value;
 }
+
+function cybPixel(y, cb, cr) {
+    this.y = y;
+    this.cb = cb;
+    this.cr = cr;
+}
+
+function RBPixel(r, b) {
+    this.r = r;
+    this.b = b;
+}

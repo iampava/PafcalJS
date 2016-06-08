@@ -22,7 +22,7 @@ function modelBackground(video, width, height) {
     }, 1000);
 }
 
-function extractBackground(n, m, background, image) {
+function extractBackground(m, n, background, image) {
     var binaryImage = new BinaryImage(n, m),
         length = background.data.length;
     for (var i = 0; i < length; i += 4) {
@@ -30,7 +30,7 @@ function extractBackground(n, m, background, image) {
             imagePixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]);
         var rowIndex = Math.floor((i / 4) / m);
 
-        if (rgbThreshold(THRESHOLD, backgroundPixel, imagePixel)) {
+        if (backgroundThreshold(THRESHOLD, backgroundPixel, imagePixel)) {
             binaryImage.data[rowIndex].push(true);
         } else {
             if (binaryImage.data[rowIndex] === undefined) {
@@ -42,6 +42,22 @@ function extractBackground(n, m, background, image) {
     return binaryImage;
 }
 
+
+
+function rbGaussianModel(width, height, image, context) {
+    var imageData = context.getImageData(0, 0, width, height),
+        length = image.data.length;
+    for (var i = 0; i < length; i += 4) {
+        var rowIndex = Math.floor(i / 4 / width),
+            rbPixel = rgbToRb({ red: image.data[i], green: image.data[i + 1], blue: image.data[i + 2] });
+        imageData.data[i + 3] = 255;
+        imageData.data[i + 1] = 0;
+        imageData.data[i + 2] = 0;
+        imageData.data[i + 0] = rbLikelihood(rbPixel);
+    }
+    context.putImageData(imageData, 0, 0);
+}
+
 function backgroundAndSkinDetection(width, height, background, image) {
     var binaryImage = new BinaryImage(height, width),
         length = background.data.length;
@@ -50,7 +66,7 @@ function backgroundAndSkinDetection(width, height, background, image) {
             imagePixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]);
         var rowIndex = Math.floor((i / 4) / width);
 
-        if (rgbThreshold(THRESHOLD, backgroundPixel, imagePixel) && hsvThreshold(rgbToHsv(imagePixel))) {
+        if (backgroundThreshold(THRESHOLD, backgroundPixel, imagePixel) && (cybThreshold(rgbTocyb(imagePixel)) || (hsvThreshold(rgbToHsv(imagePixel))))) {
             binaryImage.data[rowIndex].push(true);
         } else {
             binaryImage.data[rowIndex].push(false);
@@ -59,7 +75,21 @@ function backgroundAndSkinDetection(width, height, background, image) {
     return binaryImage;
 }
 
-function skinDetection(width, height, image) {
+function cybRgbSkinDetection(width, height, image) {
+    var binaryImage = new BinaryImage(height, width),
+        length = image.data.length;
+    for (var i = 0; i < length; i += 4) {
+        var rgbPixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]);
+        var hsvPixel = rgbToHsv(rgbPixel);
+        var cybPixel = rgbTocyb(rgbPixel);
+        var rowIndex = Math.floor((i / 4) / width);
+
+        binaryImage.data[rowIndex].push(hsvThreshold(hsvPixel) || cybThreshold(cybPixel));
+    }
+    return binaryImage;
+}
+
+function hsvSkinDetection(width, height, image) {
     var binaryImage = new BinaryImage(height, width),
         length = image.data.length;
     for (var i = 0; i < length; i += 4) {
@@ -68,6 +98,19 @@ function skinDetection(width, height, image) {
         var rowIndex = Math.floor((i / 4) / width);
 
         binaryImage.data[rowIndex].push(hsvThreshold(hsvPixel));
+    }
+    return binaryImage;
+}
+
+function cybSkinDetection(width, height, image) {
+    var binaryImage = new BinaryImage(height, width),
+        length = image.data.length;
+    for (var i = 0; i < length; i += 4) {
+        var rgbPixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]);
+        var cybPixel = rgbTocyb(rgbPixel);
+        var rowIndex = Math.floor((i / 4) / width);
+
+        binaryImage.data[rowIndex].push(cybThreshold(cybPixel));
     }
     return binaryImage;
 }
@@ -91,8 +134,9 @@ function recognizeHand(video, width, height) {
     foregroundContext = document.getElementById('foregroundCanvas').getContext('2d');
     foregroundContext.drawImage(video, 0, 0, width, height);
     destinationContext = document.getElementById('resultCanvas').getContext('2d');
-    //result = extractBackground(height, width, BACKGROUND_DATA, imageData);
-    result = backgroundAndSkinDetection(width, height, BACKGROUND_DATA, imageData);
+    // rbGaussianModel(width, height, imageData, destinationContext);
+    //result = backgroundAndSkinDetection(width, height, BACKGROUND_DATA, imageData);
+    result = hsvSkinDetection(width, height, imageData);
     printBinaryImage(result, width, height, destinationContext);
 }
 
