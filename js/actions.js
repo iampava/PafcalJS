@@ -140,8 +140,11 @@ function recognizeHand(video, width, height) {
     destinationContext = document.getElementById('resultCanvas').getContext('2d');
 
     result = backgroundAndSkinDetection(width, height, BACKGROUND_DATA, imageData);
+    var elem = new FullMorphoElement(21);
+    var morphoElem = erosion(elem, dilation(elem, result.image, result.table), result.table);
     printBinaryImage(result.image, width, height, destinationContext);
-    slideWindow(width, height, foregroundContext, HAND_RATIO, result.table);
+    printBinaryImage(morphoElem, width, height, foregroundContext);
+    //slideWindow(width, height, foregroundContext, HAND_RATIO, result.table);
 }
 
 
@@ -149,11 +152,8 @@ function slideWindow(width, height, context, ratio, table) {
     var imageData = context.getImageData(0, 0, width, height);
     for (var i = 0; i <= height - ratio.HEIGHT; i++) {
         for (var j = 0; j <= width - ratio.WIDTH; j++) {
-            var point = new Point(j, i),
-                secondPoint = new Point(j + ratio.WIDTH, i + ratio.HEIGHT);
-            if (point.x == 600 && point.y == 400) {
-                console.log("dafaq?");
-            }
+            var point = new Point(j, i);
+
             if (recognitionStep(width, height, point, context, table, ratio)) {
                 return true;
             }
@@ -228,6 +228,8 @@ function filterStep(width, imageData, index, filter) {
 }
 
 function setUp(width, height) {
+    testCreationOfTableFromImage();
+    return;
 
     var video = document.createElement('video');
 

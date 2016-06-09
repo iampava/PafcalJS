@@ -37,7 +37,7 @@ var HD_CONSTRAINTS = {
         }
     }
 };
-var RECOGNITIONS_PER_SECOND = 0.5;
+var RECOGNITIONS_PER_SECOND = 30;
 var BACKGROUND_DATA = null;
 var NUMBER_OF_BACKGROUND_ITERATIONS = 2;
 
@@ -92,3 +92,24 @@ var HAND_RATIO = {
     WIDTH: 100,
     HEIGHT: 250
 };
+
+
+var FULL_ELEMENT_3 = {
+    size: 3,
+    data: [
+        [1, 1, 1],
+        [1, 1, 1],
+        [1, 1, 1]
+    ]
+}
+
+var FULL_ELEMENT_5 = {
+    size: 5,
+    data: [
+        [1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1]
+    ]
+}

@@ -73,14 +73,11 @@ function rgbMin(pixel) {
 function computeBinaryLookupValue(n, m, value, table) {
     var result = 0;
 
-    result += table.get(n - 1, m) || 0;
-    result += table.get(n, m - 1) || 0;
-    result -= table.get(n - 1, m - 1) || 0;
-    result += (value === true) ? 1 : 0;
-    if (result < table.get(n - 1, m) || result < table.get(n, m - 1) || result < table.get(n - 1, m - 1)) {
-        var wtf = 2;
-        wtf++;
-    }
+    result += table.get(n - 1, m);
+    result += table.get(n, m - 1);
+    result -= table.get(n - 1, m - 1);
+    result += (value) ? 1 : 0;
+
     return result;
 }
 
@@ -89,7 +86,7 @@ function getAreaValue(point1, point2, table) {
         throw new Error("The points are not in the right order!")
     };
 
-    result = table.data[point2.y][point2.x] + table.data[point1.y][point1.x] - table.data[point1.y][point2.x] - table.data[point2.y][point1.x];
+    result = table.get(point2.y, point2.x) + table.get(point1.y - 1, point1.x - 1) - table.get(point1.y - 1, point2.x) - table.get(point2.y, point1.x - 1);
     return result;
 }
 

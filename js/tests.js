@@ -48,3 +48,42 @@ function testFilterApplication(initialData, filteredData) {
     table.data[2].push(computeBinaryLookupValue(2, 3, true, table));
     table.data[2].push(computeBinaryLookupValue(2, 4, false, table));
 }*/
+
+function testErosion() {
+    var elem = new FullMorphoElement(3);
+    var binaryImage = {
+        n: 5,
+        m: 5,
+        data: [
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1]
+        ]
+    }
+    var table = new BinaryLookupTable(5, 5);
+    table.data = [
+        [1, 2, 3, 4, 5],
+        [2, 4, 6, 8, 10],
+        [3, 6, 9, 12, 15],
+        [4, 8, 12, 16, 20],
+        [5, 10, 15, 20, 25]
+    ]
+    console.log(erosion(elem, binaryImage, table));
+}
+
+function testCreationOfTableFromImage() {
+    var binaryImage = {
+        n: 5,
+        m: 5,
+        data: [
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1]
+        ]
+    }
+    console.log(new BinaryLookupTableFromImage(binaryImage));
+}
