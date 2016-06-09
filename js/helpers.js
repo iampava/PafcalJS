@@ -69,3 +69,48 @@ function rgbMax(pixel) {
 function rgbMin(pixel) {
     return Math.min(pixel.red, pixel.green, pixel.blue);
 }
+
+function computeBinaryLookupValue(n, m, value, table) {
+    var result = 0;
+
+    result += table.get(n - 1, m) || 0;
+    result += table.get(n, m - 1) || 0;
+    result -= table.get(n - 1, m - 1) || 0;
+    result += (value === true) ? 1 : 0;
+    if (result < table.get(n - 1, m) || result < table.get(n, m - 1) || result < table.get(n - 1, m - 1)) {
+        var wtf = 2;
+        wtf++;
+    }
+    return result;
+}
+
+function getAreaValue(point1, point2, table) {
+    if (point1.x > point2.x || point1.y > point2.y) {
+        throw new Error("The points are not in the right order!")
+    };
+
+    result = table.data[point2.y][point2.x] + table.data[point1.y][point1.x] - table.data[point1.y][point2.x] - table.data[point2.y][point1.x];
+    return result;
+}
+
+function printRectangle(width, height, point, secondPoint, context) {
+    if (point.x > secondPoint.x || point.y > secondPoint.y) {
+        throw new Error("The points are not in the right order!")
+    };
+
+    var imageData = context.getImageData(0, 0, width, height),
+        rowStart = point.y,
+        rowEnd = secondPoint.y,
+        colStart = point.x,
+        colEnd = secondPoint.x;
+
+    for (var i = rowStart; i <= rowEnd; i++) {
+        for (var j = colStart; j <= colEnd; j++) {
+            imageData.data[i * width * 4 + j * 4 + 0] = 0;
+            imageData.data[i * width * 4 + j * 4 + 1] = 0;
+            imageData.data[i * width * 4 + j * 4 + 2] = 255;
+            imageData.data[i * width * 4 + j * 4 + 3] = 255;
+        }
+    }
+    context.putImageData(imageData, 0, 0);
+}

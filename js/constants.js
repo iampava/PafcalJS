@@ -37,28 +37,11 @@ var HD_CONSTRAINTS = {
         }
     }
 };
-var RECOGNITIONS_PER_SECOND = 8;
+var RECOGNITIONS_PER_SECOND = 0.5;
 var BACKGROUND_DATA = null;
 var NUMBER_OF_BACKGROUND_ITERATIONS = 2;
 
 navigator.getMedia = (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
-// var HSV_THRESHOLD = {
-//     HUE: [{
-//         MIN: 0,
-//         MAX: 25
-//     }, {
-//         MIN: 250,
-//         MAX: 360
-//     }],
-//     SATURATION: [{
-//         MIN: 30,
-//         MAX: 100
-//     }],
-//     VALUE: [{
-//         MIN: 0,
-//         MAX: 100
-//     }]
-// };
 var HSV_THRESHOLD = {
     HUE: [{
         MIN: 0,
@@ -76,6 +59,14 @@ var HSV_THRESHOLD = {
         MAX: 100
     }]
 };
+var LOW_PASS_FILTER = [
+    [1 / 9, 1 / 9, 1 / 9],
+    [1 / 9, 1 / 9, 1 / 9],
+    [1 / 9, 1 / 9, 1 / 9]
+];
+
+
+
 var CYB_CONVERSION_MATRIX = [
     [0.299, 0.587, 0.114],
     [-0.169, -0.331, 0.5],
@@ -95,4 +86,9 @@ var CYB_THRESHOLD = {
         MIN: 130,
         MAX: 175
     }]
+};
+var STEP_SIZE = 4;
+var HAND_RATIO = {
+    WIDTH: 100,
+    HEIGHT: 250
 };

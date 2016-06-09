@@ -1,9 +1,27 @@
+function Point(x, y) {
+    this.x = x;
+    this.y = y;
+}
+
 function BinaryImage(n, m) {
     this.n = n;
     this.m = m;
     this.data = [];
     for (var temp = 0; temp <= n; temp++) {
         this.data.push([]);
+    }
+}
+
+function BinaryLookupTable(width, height) {
+    this.width = width;
+    this.height = height;
+    this.data = [];
+    for (var temp = 0; temp < height; temp++) {
+        this.data.push([]);
+    }
+    this.get = function(n, m) {
+        if (!this.data[n]) return undefined;
+        return this.data[n][m];
     }
 }
 
