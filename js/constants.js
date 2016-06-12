@@ -37,7 +37,7 @@ var HD_CONSTRAINTS = {
         }
     }
 };
-var RECOGNITIONS_PER_SECOND = 30;
+var RECOGNITIONS_PER_SECOND = 6;
 var BACKGROUND_DATA = null;
 var NUMBER_OF_BACKGROUND_ITERATIONS = 2;
 
@@ -60,9 +60,9 @@ var HSV_THRESHOLD = {
     }]
 };
 var LOW_PASS_FILTER = [
-    [1 / 9, 1 / 9, 1 / 9],
-    [1 / 9, 1 / 9, 1 / 9],
-    [1 / 9, 1 / 9, 1 / 9]
+    [1 / 16, 1 / 8, 1 / 16],
+    [1 / 8, 1 / 4, 1 / 8],
+    [1 / 16, 1 / 8, 1 / 16]
 ];
 
 

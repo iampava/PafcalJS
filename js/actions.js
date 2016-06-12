@@ -16,7 +16,6 @@ function modelBackground(video, width, height) {
             console.log("DONE");
             setTimeout(function() {
                 setInterval(function() {
-                    console.log("ulala");
                     recognizeHand(video, width, height);
                 }, 1000 / RECOGNITIONS_PER_SECOND);
             }, 2000);
@@ -25,7 +24,7 @@ function modelBackground(video, width, height) {
 }
 
 function extractBackground(m, n, background, image) {
-    var binaryImage = new BinaryImage(n, m),
+    var binaryImage = new BinaryImage(m, n),
         length = background.data.length;
     for (var i = 0; i < length; i += 4) {
         var backgroundPixel = new RGBPixel(background.data[i], background.data[i + 1], background.data[i + 2]),
@@ -71,7 +70,7 @@ function cybSkinDetection(pixel) {
 }
 
 function extractSkin(width, height, image) {
-    var binaryImage = new BinaryImage(height, width),
+    var binaryImage = new BinaryImage(width, height),
         length = image.data.length;
     for (var i = 0; i < length; i += 4) {
         var imagePixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]),
@@ -87,13 +86,14 @@ function extractSkin(width, height, image) {
 }
 
 function backgroundAndSkinDetection(width, height, background, image) {
-    var binaryImage = new BinaryImage(height, width),
+    var binaryImage = new BinaryImage(width, height),
         binaryLookupTable = new BinaryLookupTable(width, height);
     length = image.data.length;
     for (var i = 0; i < length; i += 4) {
         var backgroundPixel = new RGBPixel(background.data[i], background.data[i + 1], background.data[i + 2]),
             imagePixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]),
             rowIndex = Math.floor((i / 4) / width),
+            // logic = backgroundThreshold(THRESHOLD, backgroundPixel, imagePixel) && rgbSkinDetection(imagePixel) && hsvSkinDetection(rgbToHsv(imagePixel));
             logic = rgbSkinDetection(imagePixel) && hsvSkinDetection(rgbToHsv(imagePixel));
 
         binaryImage.data[rowIndex].push(logic);
@@ -116,8 +116,33 @@ function backgroundAndSkinDetection(width, height, background, image) {
     context.putImageData(imageData, 0, 0);
 }*/
 
+function _merge(image, shape) {
+    //put shape in top left corner
+    for (var i = 0; i < shape.n; i++) {
+        for (var j = 0; j < shape.m; j++) {
+            if (shape.data[i][j] === 0) continue;
+            image.data[i][j] = shape.data[i][j]
+        }
+    }
+    return image;
+}
 
+function checkHandShape(width, height, image, context) {
+    var resized = resizeImage(BINARY_HAND_SHAPE, 9),
+        compareImage = new BinaryImage(resized.m, resized.n);
 
+    for (var i = 0; i < resized.n; i++) {
+        for (var j = 0; j < resized.m; j++) {
+            compareImage.data[i].push(image.data[i][j]);
+        }
+    }
+    result = _merge(image, resized);
+    printBinaryImage(result, width, height, context);
+    if (compare(compareImage, resized)) {
+        console.log("yohoo");
+        // alert("yohooo");
+    }
+}
 
 function findHand(image) {}
 
@@ -138,12 +163,14 @@ function recognizeHand(video, width, height) {
 
     foregroundContext = document.getElementById('foregroundCanvas').getContext('2d');
     destinationContext = document.getElementById('resultCanvas').getContext('2d');
+    destinationContext.drawImage(video, 0, 0, width, height);
 
     result = backgroundAndSkinDetection(width, height, BACKGROUND_DATA, imageData);
-    var elem = new FullMorphoElement(21);
-    var morphoElem = erosion(elem, dilation(elem, result.image, result.table), result.table);
+    // var elem = new FullMorphoElement(11);
+    // var morphoElem = erosion(elem, dilation(elem, result.image, result.table), result.table);
     printBinaryImage(result.image, width, height, destinationContext);
-    printBinaryImage(morphoElem, width, height, foregroundContext);
+    // checkHandShape(width, height, morphoElem, foregroundContext);
+    // printBinaryImage(morphoElem, width, height, foregroundContext);
     //slideWindow(width, height, foregroundContext, HAND_RATIO, result.table);
 }
 
@@ -228,7 +255,9 @@ function filterStep(width, imageData, index, filter) {
 }
 
 function setUp(width, height) {
-    testCreationOfTableFromImage();
+    var q= new Queue();
+    q.push(2);
+    noiseReductionTest();
     return;
 
     var video = document.createElement('video');
@@ -251,4 +280,12 @@ function setUp(width, height) {
     video.onplay = function(ev) {
         modelBackground(video, width, height);
     };
+}
+
+function capture() {
+    var canvas = document.getElementById("resultCanvas");
+    var img = canvas.toDataURL("image/png");
+
+    // document.write('<img src="' + img + '"/>');
+    window.location = canvas.toDataURL("image/png");
 }

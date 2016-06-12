@@ -3,8 +3,46 @@ function Point(x, y) {
     this.y = y;
 }
 
-//trebuie sa contina true/false
-function BinaryImage(n, m) {
+function Queue() {
+    this.size = 0;
+    this.first = {};
+    this.last = this.first;
+
+    this.push = function(element) {
+        var llast = this.last;
+        this.last = { value: element, next: null };
+        llast.next = this.last;
+        this.size++;
+    }
+
+    this.pop = function() {
+        if (this.size === 0) {
+            throw new Error("Queue is empty!");
+        }
+        var value = this.first.next.value;
+
+        if (this.size === 1) {
+            this.first = {};
+            this.last = this.first;
+        } else {
+            this.first.next = this.first.next.next;
+        }
+        this.size--;
+
+        return value;
+    }
+}
+
+
+function Filter(size, data) {
+    if (this.size % 2 === 0) {
+        throw new Error("Filter must be odd in size!");
+    }
+    this.size = size;
+    this.data = data;
+}
+
+function BinaryImage(m, n) {
     this.n = n;
     this.m = m;
     this.data = [];

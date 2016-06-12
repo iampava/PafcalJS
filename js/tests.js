@@ -87,3 +87,48 @@ function testCreationOfTableFromImage() {
     }
     console.log(new BinaryLookupTableFromImage(binaryImage));
 }
+
+function testResizeImage() {
+    var image = new BinaryImage(3, 3);
+    image.data = [
+        [1, 0, 1],
+        [0, 1, 0],
+        [1, 0, 1]
+    ];
+    console.log(resizeImage(image, 2));
+}
+
+function _binaryImageFromImage(width, height, imageData) {
+    var binaryImage = new BinaryImage(width, height);
+    for (var i = 0; i < imageData.length; i += 4) {
+        var rowIndex = Math.floor((i / 4) / width),
+            logic = (imageData[i] === 255) ? 0 : 1;
+        binaryImage.data[rowIndex].push(logic);
+    }
+    return binaryImage;
+}
+
+function noiseReductionTest() {
+    var foregroundContext = document.getElementById('foregroundCanvas').getContext('2d'),
+        destinationContext = document.getElementById('resultCanvas').getContext('2d'),
+        img = new Image(),
+        width = 1280,
+        height = 720;
+
+    img.addEventListener("load", function() {
+        destinationContext.drawImage(img, 0, 0);
+
+        var result = backgroundAndSkinDetection(width, height, { data: [] }, destinationContext.getImageData(0, 0, width, height));
+
+        // var binaryImage = _binaryImageFromImage(width, height, destinationContext.getImageData(0, 0, width, height).data),
+        //     table = new BinaryLookupTableFromImage(binaryImage),
+        //     erosionElement = new FullMorphoElement(5),
+        //     dilationElement = new FullMorphoElement(5),
+        //     filter = new Filter(3, LOW_PASS_FILTER);
+
+        // // var resultImage = medianFilter(binaryImage, table, 13);
+        // var resultImage = binaryImageFilter(binaryImage, filter);
+        printBinaryImage(result.image, width, height, foregroundContext);
+    }, false);
+    img.src = '../images/dragos.png'; // Set source path
+}

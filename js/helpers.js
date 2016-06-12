@@ -2,7 +2,7 @@ function binaryImageMultiplication(firstImage, secondImage) {
     if (firstImage.n !== secondImage.n || firstImage.m !== secondImage.m) {
         throw new Error("Matrixes are not the same size!")
     }
-    var result = new BinaryImage(firstImage.n, firstImage.m);
+    var result = new BinaryImage(firstImage.m, firstImage.n);
     for (var i = 0; i < firstImage.n; i++) {
         for (var j = 0; j < firstImage.m; j++) {
             result.data[i][j] = firstImage.data[i][j] * secondImage.data[i][j];
@@ -110,4 +110,21 @@ function printRectangle(width, height, point, secondPoint, context) {
         }
     }
     context.putImageData(imageData, 0, 0);
+}
+
+function compare(image, handShape) {
+    var detected = 0,
+        total = image.m * image.n;
+    if (image.n !== handShape.n || image.m !== handShape.m) {
+        throw new Error("Shape and hand don't have the same size!");
+    }
+    for (var i = 0; i < image.n; i++) {
+        for (var j = 0; j < image.m; j++) {
+            if (image.data[i][j] === handShape.data[i][j]) detected++;
+        }
+    }
+    if (detected / total > 0.75) {
+        return true;
+    }
+    return false;
 }
