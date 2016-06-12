@@ -255,9 +255,9 @@ function filterStep(width, imageData, index, filter) {
 }
 
 function setUp(width, height) {
-    var q= new Queue();
-    q.push(2);
+    console.log(new Date().getTime());
     noiseReductionTest();
+    console.log(new Date().getTime());
     return;
 
     var video = document.createElement('video');

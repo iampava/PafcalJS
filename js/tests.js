@@ -118,17 +118,31 @@ function noiseReductionTest() {
     img.addEventListener("load", function() {
         destinationContext.drawImage(img, 0, 0);
 
-        var result = backgroundAndSkinDetection(width, height, { data: [] }, destinationContext.getImageData(0, 0, width, height));
+        // var result = backgroundAndSkinDetection(width, height, { data: [] }, destinationContext.getImageData(0, 0, width, height));
 
-        // var binaryImage = _binaryImageFromImage(width, height, destinationContext.getImageData(0, 0, width, height).data),
-        //     table = new BinaryLookupTableFromImage(binaryImage),
-        //     erosionElement = new FullMorphoElement(5),
-        //     dilationElement = new FullMorphoElement(5),
-        //     filter = new Filter(3, LOW_PASS_FILTER);
+        var binaryImage = _binaryImageFromImage(width, height, destinationContext.getImageData(0, 0, width, height).data),
+            table = new BinaryLookupTableFromImage(binaryImage),
+            erosionElement = new FullMorphoElement(5),
+            dilationElement = new FullMorphoElement(5),
+            filter = new Filter(3, LOW_PASS_FILTER);
 
-        // // var resultImage = medianFilter(binaryImage, table, 13);
+        // var resultImage = medianFilter(binaryImage, table, 13);
+        var resultImage = deleteConectedComponents(binaryImage, 3000);
         // var resultImage = binaryImageFilter(binaryImage, filter);
-        printBinaryImage(result.image, width, height, foregroundContext);
+
+        printBinaryImage(resultImage, width, height, foregroundContext);
     }, false);
-    img.src = '../images/dragos.png'; // Set source path
+    img.src = '../images/test.png'; // Set source path
+}
+
+function testConectedComponentsDeletion() {
+    var image = new BinaryImage(5, 5);
+    image.data = [
+        [1, 1, 1, 0, 1],
+        [0, 0, 1, 0, 1],
+        [1, 0, 0, 0, 1],
+        [1, 1, 1, 0, 0],
+        [0, 0, 0, 0, 1]
+    ];
+    console.log(deleteConectedComponents(image, 4));
 }

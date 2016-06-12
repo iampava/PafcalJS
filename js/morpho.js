@@ -94,35 +94,48 @@ function resizeImage(image, ratio) {
     return resultImage;
 }
 
-// function deleteConectedComponents(binaryImage, sizeThreshold) {
-//     var components = [],
-//         count = 0,
-//         labelImage = new BinaryImage(binaryImage.m, binaryImage.n),
-//         resultImage = new BinaryImage(binaryImage.m, binaryImage.n);
-//     for (var i = 0; i < binaryImage.n; i++) {
-//         for (var j = 0; j < binaryImage.m; j++) {
-//             resultImage.data[i] = binaryImage.data[i].slice();
-//         }
-//     }
+function deleteConectedComponents(binaryImage, sizeThreshold) {
+    var m = binaryImage.m,
+        n = binaryImage.n,
+        q = new Queue(),
+        components = [],
+        count = -1,
+        labelImage = new BinaryImage(m, n),
+        resultImage = new BinaryImage(m, n);
 
-    
+    for (var i = 0; i < n; i++) {
+        for (var j = 0; j < m; j++) {
+            resultImage.data[i].push(0)
+        }
+    };
 
-//     //copied the matrix
-//     for (var i = 0; i < n; i++) {
-//         for (var j = 0; j < m; j++) {
-//             if (binaryImage.data[i][j] === 0) continue;
-//             if ('f') {
-//                 labelImage.data[i][j] = 'f';
-//                 continue;
-//             }
-//             for(all neightbours){
-//                 q.push(neightbour);
-//             }
+    while (count < m * n) {
+        if (q.size === 0) {
+            count++
+            q.push(new Point(count % m, Math.floor(count / m)));
+            components[count] = [];
+        } else {
+            var point = q.pop(),
+                neighbours = undefined;
+            if (binaryImage.data[point.y] === undefined || labelImage.data[point.y] === undefined) {
+                console.log("wut?");
+            }
+            if (binaryImage.data[point.y][point.x] === 0 || labelImage.data[point.y][point.x] !== undefined) continue;
 
-
-//         }
-//     }
-
-
-
-// }
+            labelImage.data[point.y][point.x] = count;
+            components[count].push(point);
+            neighbours = getNeighbours(binaryImage, point, function(neighbour) {
+                return (binaryImage.data[neighbour.y][neighbour.x] === 1 && labelImage.data[neighbour.y][neighbour.x] === undefined);
+            });
+            q.pushArray(neighbours);
+        }
+    }
+    for (var i = 0; i < components.length; i++) {
+        if (components[i].length >= sizeThreshold) {
+            for (var j = 0; j < components[i].length; j++) {
+                resultImage.data[components[i][j].y][components[i][j].x] = 1;
+            }
+        }
+    }
+    return resultImage;
+}

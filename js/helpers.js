@@ -128,3 +128,17 @@ function compare(image, handShape) {
     }
     return false;
 }
+
+function getNeighbours(image, point, testFunction) {
+    var neighbours = [];
+
+    for (var i = -1; i <= 1; i++) {
+        for (var j = -1; j <= 1; j++) {
+            var neighbour = new Point(point.x + j, point.y + i);
+            if (image.fits(neighbour) && testFunction(neighbour)) {
+                neighbours.push(neighbour);
+            }
+        }
+    }
+    return neighbours;
+}

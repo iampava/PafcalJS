@@ -15,6 +15,13 @@ function Queue() {
         this.size++;
     }
 
+    this.pushArray = function(array) {
+        var _this = this;
+        array.forEach(function(element) {
+            _this.push(element);
+        })
+    }
+
     this.pop = function() {
         if (this.size === 0) {
             throw new Error("Queue is empty!");
@@ -48,6 +55,11 @@ function BinaryImage(m, n) {
     this.data = [];
     for (var temp = 0; temp < n; temp++) {
         this.data.push([]);
+    }
+    this.fits = function(point) {
+        if (point.x < 0 || point.x >= m) return false;
+        if (point.y < 0 || point.y >= n) return false;
+        return true;
     }
 }
 
