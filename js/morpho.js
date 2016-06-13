@@ -94,48 +94,47 @@ function resizeImage(image, ratio) {
     return resultImage;
 }
 
-function deleteConectedComponents(binaryImage, sizeThreshold) {
-    var m = binaryImage.m,
-        n = binaryImage.n,
-        q = new Queue(),
-        components = [],
-        count = -1,
-        labelImage = new BinaryImage(m, n),
-        resultImage = new BinaryImage(m, n);
+function deleteConectedComponents(width, height, sparseImage, sizeThreshold) {
+    var q = new Queue(),
+        resultBinaryImage = new BinaryImage(width, height),
+        resultSparseImage = new SparseBinaryImage(height),
+        component = [], //pun indexurile la puncte
+        labels = [],
+        count = -1;
 
-    for (var i = 0; i < n; i++) {
-        for (var j = 0; j < m; j++) {
-            resultImage.data[i].push(0)
-        }
-    };
-
-    while (count < m * n) {
+    while (count < sparseImage.size) {
         if (q.size === 0) {
-            count++
-            q.push(new Point(count % m, Math.floor(count / m)));
-            components[count] = [];
-        } else {
-            var point = q.pop(),
-                neighbours = undefined;
-            if (binaryImage.data[point.y] === undefined || labelImage.data[point.y] === undefined) {
-                console.log("wut?");
+            if (component.length >= sizeThreshold) {
+                component.forEach(function(index) {
+                    var point = sparseImage.getPointBasedOnIndex(index);
+                    resultBinaryImage.data[point.y][point.x] = 1;
+                });
             }
-            if (binaryImage.data[point.y][point.x] === 0 || labelImage.data[point.y][point.x] !== undefined) continue;
 
-            labelImage.data[point.y][point.x] = count;
-            components[count].push(point);
-            neighbours = getNeighbours(binaryImage, point, function(neighbour) {
-                return (binaryImage.data[neighbour.y][neighbour.x] === 1 && labelImage.data[neighbour.y][neighbour.x] === undefined);
+            count++;
+            component = [];
+            q.push(count)
+        } else {
+            var index = q.pop(),
+                neighbours = undefined;
+
+            labels[index] = true;
+            component.push(index);
+            neighbours = sparseImage.getNeighboursByIndex(index, function(tempIndex) {
+                if (labels[tempIndex] === true) {
+                    return false;
+                }
+                return true;
             });
+
             q.pushArray(neighbours);
         }
     }
-    for (var i = 0; i < components.length; i++) {
-        if (components[i].length >= sizeThreshold) {
-            for (var j = 0; j < components[i].length; j++) {
-                resultImage.data[components[i][j].y][components[i][j].x] = 1;
-            }
-        }
+
+    for (var i = 0; i < height; i++) {
+        resultBinaryImage.data[i].forEach(function(element, index) {
+            resultSparseImage.add(i, index);
+        });
     }
-    return resultImage;
+    return resultSparseImage;
 }

@@ -11,7 +11,7 @@ function binaryImageMultiplication(firstImage, secondImage) {
     return result;
 }
 
-function printBinaryImage(image, width, height, context) {
+function printBinaryImage(width, height, image, context) {
     var imageData = context.getImageData(0, 0, width, height),
         length = imageData.data.length;
     for (var i = 0; i < length; i += 4) {
@@ -23,6 +23,17 @@ function printBinaryImage(image, width, height, context) {
     context.putImageData(imageData, 0, 0);
 }
 
+function printSparseImage(width, height, image, context) {
+    var imageData = context.createImageData(width, height),
+        length = imageData.data.length;
+    for (var i = 0; i < image.col.length; i++) {
+        var point = image.getPointBasedOnIndex(i);
+        imageData.data[point.y * 4 * width + point.x * 4 + 3] = 255;
+        imageData.data[point.y * 4 * width + point.x * 4 + 1] = 255;
+    }
+
+    context.putImageData(imageData, 0, 0);
+}
 
 function backgroundThreshold(threshold, backgroundPixel, imagePixel) {
     //return true if the selected pixel is FOREGROUND

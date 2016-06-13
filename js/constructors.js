@@ -62,6 +62,89 @@ function BinaryImage(m, n) {
         return true;
     }
 }
+//CSR method
+function SparseBinaryImage(rows) {
+    this.size = 0;
+    this.rowCount = rows;
+    this.row = [];
+    this.col = [];
+
+    this.add = function(row, col) {
+        if (this.row[row] === undefined) {
+            this.row[row] = this.size;
+            var i = row - 1;
+            while (i >= 0 && this.row[i] === undefined) {
+                this.row[i] = this.size;
+                i--;
+            }
+        }
+        this.col.push(col);
+        this.size++;
+    }
+
+    // this.addPoint = function(point) {
+    //     if (this.row[point.y] === undefined) {
+    //         this.row[point.y] = this.size;
+    //     }
+    //     this.col.push(point.x);
+    //     this.size++;
+    // }
+
+    this.getIndexBasedOnPoint = function(point) {
+        var rowOffset = this.row[point.y];
+        if (rowOffset === undefined) {
+            return null;
+        }
+        for (var j = rowOffset; j < this.col.length; j++) {
+            if (this.col[j] === point.x) return j;
+        }
+        return null;
+    }
+
+    this.getPointBasedOnIndex = function(index) {
+        var col = this.col[index],
+            left = 0,
+            right = this.rowCount;
+
+        while (left <= right) {
+            var middle = Math.floor((left + right) / 2);
+
+            if (this.row[middle] <= index && this.row[middle + 1] <= index) {
+                left = middle + 1;
+                continue;
+            }
+            if (this.row[middle] > index) {
+                right = middle - 1;
+                continue;
+            }
+            return new Point(col, middle);
+        }
+        throw new Error("Can't find point!");
+    }
+
+
+    this.getNeighboursByIndex = function(index, testFunction) {
+        var point = this.getPointBasedOnIndex(index),
+            result = [],
+            neighbours = [];
+
+        neighbours.push(new Point(point.x - 1, point.y - 1));
+        neighbours.push(new Point(point.x, point.y - 1));
+        neighbours.push(new Point(point.x + 1, point.y - 1));
+        neighbours.push(new Point(point.x - 1, point.y));
+        neighbours.push(new Point(point.x + 1, point.y));
+        neighbours.push(new Point(point.x - 1, point.y + 1));
+        neighbours.push(new Point(point.x, point.y + 1));
+        neighbours.push(new Point(point.x + 1, point.y + 1));
+
+        for (var i = 0; i < neighbours.length; i++) {
+            var found = this.getIndexBasedOnPoint(neighbours[i])
+                // if (found && testFunction(found)) result.push(found);
+        }
+        return result;
+    }
+
+}
 
 function BinaryLookupTable(width, height) {
     this.width = width;
