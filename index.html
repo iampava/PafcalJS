@@ -7,17 +7,21 @@
 <!-- <body onload='recognizeHand(1280,720, "backgroundCanvas", "foregroundCanvas", "resultCanvas")'> -->
 
 <body onload='setUp(1280, 720)'>
-    <canvas id="resultCanvas" width="1280" height="720"></canvas>
-    <canvas id="foregroundCanvas" width="1280" height="720"></canvas>
+    <button type="button" onclick="clickButton(event)" style="position:fixed;"> Me</button>
+    <button type="button" onclick="clickButton(event)" >Click Me</button>
+    <!-- <canvas id="resultCanvas" width="1280" height="720"></canvas>
+<canvas id="foregroundCanvas" width="1280" height="720"></canvas>
+<button type="button" onclick="capture()"> Get Image </button>
+ -->
     <script type="text/javascript" src="js/constants.js"></script>
     <script type="text/javascript" src="js/hand.js"></script>
     <script type="text/javascript" src="js/constructors.js"></script>
     <script type="text/javascript" src="js/conversions.js"></script>
     <script type="text/javascript" src="js/helpers.js"></script>
+    <script type="text/javascript" src="js/interaction.js"></script>
     <script type="text/javascript" src="js/morpho.js"></script>
     <script type="text/javascript" src="js/actions.js"></script>
     <script type="text/javascript" src="js/tests.js"></script>
-    <button type="button" onclick="capture()"> Get Image </button>
 </body>
 
 </html>

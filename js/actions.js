@@ -15,11 +15,10 @@ function modelBackground(video, width, height) {
             BACKGROUND_DATA.data = applyFilter(width, BACKGROUND_DATA, LOW_PASS_FILTER);
             console.log("DONE");
             setTimeout(function() {
-                recognizeHand(video, width, height);
-                console.log("DONE DONE!");
-                // setInterval(function() {
-                // recognizeHand(video, width, height);
-                // }, 1000 / RECOGNITIONS_PER_SECOND);
+                setInterval(function() {
+                    console.log("interval");
+                    recognizeHand(video, width, height);
+                }, 1000 / RECOGNITIONS_PER_SECOND);
             }, 2000);
         }
     }, 1000);
@@ -99,8 +98,9 @@ function backgroundAndSkinDetection(width, height, background, image) {
             rowIndex = Math.floor((i / 4) / width);
         if (logic) {
             sparseImage.add(rowIndex, (i / 4) % width);
+            binaryImage.data[rowIndex][(i / 4) % width] = 1;
+
         }
-        binaryImage.data[rowIndex].push(logic);
         // binaryLookupTable.data[rowIndex].push(computeBinaryLookupValue(rowIndex, binaryImage.data[rowIndex].length - 1, logic, binaryLookupTable));
     }
     return { sparse: sparseImage, binary: binaryImage };
@@ -167,14 +167,17 @@ function recognizeHand(video, width, height) {
 
     foregroundContext = document.getElementById('foregroundCanvas').getContext('2d');
     destinationContext = document.getElementById('resultCanvas').getContext('2d');
-    // destinationContext.drawImage(video, 0, 0, width, height);
+    destinationContext.drawImage(video, 0, 0, width, height);
     result = backgroundAndSkinDetection(width, height, BACKGROUND_DATA, imageData);
     // var elem = new FullMorphoElement(11);
     // var morphoElem = erosion(elem, dilation(elem, result.image, result.table), result.table);
-    var afterThresh = deleteConectedComponents(width, height, result.sparse, 10);
+    var temp = new Date().getTime();
+    // var afterThresh = sequantialDeleteConectedComponents(width, height, result.sparse, 10000);
+    var final = new Date().getTime() - temp;
+    console.log("Time:", final, "Size: ", result.sparse.size);
     // console.log(afterThresh);
-    // printBinaryImage(width, height, result.binary, foregroundContext);
-    printSparseImage(width, height, afterThresh, destinationContext);
+    printBinaryImage(width, height, result.binary, foregroundContext);
+    // printSparseImage(width, height, afterThresh, destinationContext);
 
     // checkHandShape(width, height, morphoElem, foregroundContext);
     // printBinaryImage(morphoElem, width, height, foregroundContext);
@@ -262,6 +265,9 @@ function filterStep(width, imageData, index, filter) {
 }
 
 function setUp(width, height) {
+    clickOnPage(22, 25);
+    // testSequantialDeleteConectedComponents();
+    return;
 
     var video = document.createElement('video');
 

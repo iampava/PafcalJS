@@ -99,6 +99,7 @@ function deleteConectedComponents(width, height, sparseImage, sizeThreshold) {
         resultBinaryImage = new BinaryImage(width, height),
         resultSparseImage = new SparseBinaryImage(height),
         component = [], //pun indexurile la puncte
+        // inQueue = [],
         labels = [],
         count = -1;
 
@@ -113,17 +114,22 @@ function deleteConectedComponents(width, height, sparseImage, sizeThreshold) {
 
             count++;
             component = [];
+            // inQueue = [];
             q.push(count)
         } else {
             var index = q.pop(),
                 neighbours = undefined;
-
+            if (labels[index] === true) continue;
+            if (index > sparseImage.size) {
+                throw new Error("wtf?");
+            }
             labels[index] = true;
             component.push(index);
             neighbours = sparseImage.getNeighboursByIndex(index, function(tempIndex) {
-                if (labels[tempIndex] === true) {
+                if (labels[tempIndex] === true) { // && !inQueue[tempIndex]) {
                     return false;
                 }
+                // inQueue[tempIndex] = true;
                 return true;
             });
 
@@ -137,4 +143,66 @@ function deleteConectedComponents(width, height, sparseImage, sizeThreshold) {
         });
     }
     return resultSparseImage;
+}
+
+function sequantialDeleteConectedComponents(width, height, sparseImage, sizeThreshold) {
+    var indexLabel = [],
+        labels = [],
+        labelMap = [],
+        l = 1,
+        binaryImage = new BinaryImage(width, height);
+
+    for (var i = 0; i < sparseImage.size; i++) {
+        var currentPoint = sparseImage.getPointBasedOnIndex(i),
+            top = indexLabel[sparseImage.getIndexBasedOnPoint(new Point(currentPoint.x, currentPoint.y - 1))],
+            left = indexLabel[sparseImage.getIndexBasedOnPoint(new Point(currentPoint.x - 1, currentPoint.y))];
+
+        if (top > 0 && (left === undefined || top === left)) {
+            indexLabel[i] = top;
+            labels[top].push(currentPoint);
+            continue;
+        }
+        if (left > 0 && top === undefined) {
+            indexLabel[i] = left;
+            labels[left].push(currentPoint);
+            continue;
+        }
+        if (left === undefined && top === undefined) {
+            labels[l] = [];
+            labelMap[l] = [];
+            labels[l].push(currentPoint);
+            indexLabel[i] = l;
+            l++;
+            continue;
+        }
+
+        if (top !== left) {
+            labels[top].push(currentPoint);
+            indexLabel[i] = top;
+            labelMap[top].push(left);
+            labelMap[left].push(top);
+            continue;
+        }
+    }
+    labels.forEach(function(arr, index) {
+        if (arr.length >= sizeThreshold) {
+            arr.forEach(function(point) {
+                binaryImage.data[point.y][point.x] = 1;
+            });
+        } else {
+            var sum = arr.length;
+            labelMap[index].some(function(mapIndex) {
+                sum += labels[mapIndex].length;
+                if (sum >= sizeThreshold) {
+                    arr.forEach(function(point) {
+                        binaryImage.data[point.y][point.x] = 1;
+                    });
+                    return true;
+                }
+            })
+
+        }
+
+    });
+    return binaryImage;
 }

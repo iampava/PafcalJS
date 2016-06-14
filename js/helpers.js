@@ -12,14 +12,23 @@ function binaryImageMultiplication(firstImage, secondImage) {
 }
 
 function printBinaryImage(width, height, image, context) {
-    var imageData = context.getImageData(0, 0, width, height),
-        length = imageData.data.length;
-    for (var i = 0; i < length; i += 4) {
-        var rowIndex = Math.floor(i / 4 / width);
-        imageData.data[i + 3] = 255;
-        imageData.data[i + 1] = image.data[rowIndex][((i / 4) - rowIndex * width) % width] ? 255 : 0;
-        imageData.data[i + 0] = image.data[rowIndex][((i / 4) - rowIndex * width) % width] ? 0 : 255;
-    }
+    var imageData = context.createImageData(width, height);
+
+    image.data.forEach(function(arr, arrIndex) {
+        arr.forEach(function(value, valueIndex) {
+            var sum = arrIndex * width * 4 + valueIndex * 4;
+            imageData.data[sum + 3] = 255;
+            imageData.data[sum + 1] = 255;
+        });
+    });
+    // var imageData = context.getImageData(0, 0, width, height),
+    //     length = imageData.data.length;
+    // for (var i = 0; i < length; i += 4) {
+    //     var rowIndex = Math.floor(i / 4 / width);
+    //     imageData.data[i + 3] = 255;
+    //     imageData.data[i + 1] = image.data[rowIndex][((i / 4) - rowIndex * width) % width] ? 255 : 0;
+    //     imageData.data[i + 0] = image.data[rowIndex][((i / 4) - rowIndex * width) % width] ? 0 : 255;
+    // }
     context.putImageData(imageData, 0, 0);
 }
 
@@ -33,6 +42,7 @@ function printSparseImage(width, height, image, context) {
     }
 
     context.putImageData(imageData, 0, 0);
+    console.log("print");
 }
 
 function backgroundThreshold(threshold, backgroundPixel, imagePixel) {

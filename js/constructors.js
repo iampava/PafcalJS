@@ -91,11 +91,15 @@ function SparseBinaryImage(rows) {
     // }
 
     this.getIndexBasedOnPoint = function(point) {
-        var rowOffset = this.row[point.y];
+        var rowOffset = this.row[point.y],
+            rowLimit = this.row[point.y + 1];
         if (rowOffset === undefined) {
             return null;
         }
-        for (var j = rowOffset; j < this.col.length; j++) {
+        if (rowLimit === undefined) {
+            rowLimit = this.col.length;
+        }
+        for (var j = rowOffset; j < rowLimit; j++) {
             if (this.col[j] === point.x) return j;
         }
         return null;
@@ -128,18 +132,19 @@ function SparseBinaryImage(rows) {
             result = [],
             neighbours = [];
 
-        neighbours.push(new Point(point.x - 1, point.y - 1));
+        // neighbours.push(new Point(point.x - 1, point.y - 1));
         neighbours.push(new Point(point.x, point.y - 1));
-        neighbours.push(new Point(point.x + 1, point.y - 1));
+        // neighbours.push(new Point(point.x + 1, point.y - 1));
         neighbours.push(new Point(point.x - 1, point.y));
+
         neighbours.push(new Point(point.x + 1, point.y));
-        neighbours.push(new Point(point.x - 1, point.y + 1));
+        // neighbours.push(new Point(point.x - 1, point.y + 1));
         neighbours.push(new Point(point.x, point.y + 1));
-        neighbours.push(new Point(point.x + 1, point.y + 1));
+        // neighbours.push(new Point(point.x + 1, point.y + 1));
 
         for (var i = 0; i < neighbours.length; i++) {
             var found = this.getIndexBasedOnPoint(neighbours[i])
-                // if (found && testFunction(found)) result.push(found);
+            if (found && testFunction(found)) result.push(found);
         }
         return result;
     }

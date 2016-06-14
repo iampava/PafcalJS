@@ -163,7 +163,7 @@ function testSparseBinaryImage() {
     image.add(2, 3);
     image.add(2, 4);
     image.add(2, 5);
-    
+
     console.log(deleteConectedComponents(6, 3, image, 0));
 }
 
@@ -191,4 +191,19 @@ function testSparseImageTest() {
     image.add(2, 4);
     image.add(2, 5);
     printSparseImage(6, 3, image, destinationContext);
+}
+
+function testSequantialDeleteConectedComponents() {
+    var image = new SparseBinaryImage(3);
+    image.add(0, 0);
+    image.add(0, 1);
+    image.add(0, 4);
+    image.add(0, 5);
+
+    image.add(1, 1);
+    image.add(1, 2);
+    image.add(1, 3);
+    image.add(1, 4);
+
+    console.log(sequantialDeleteConectedComponents(6, 3, image, 5));
 }
