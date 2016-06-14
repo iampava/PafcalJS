@@ -148,7 +148,13 @@ function checkHandShape(width, height, image, context) {
     }
 }
 
-function findHand(image) {}
+function printRect(rect, ctx) {
+    ctx.beginPath();
+    ctx.lineWidth = "6";
+    ctx.strokeStyle = "red";
+    ctx.rect(rect.point.x, rect.point.y, rect.width, rect.height);
+    ctx.stroke();
+}
 
 function recognizeHand(video, width, height) {
     var tempCanvas = document.createElement('canvas'),
@@ -172,10 +178,12 @@ function recognizeHand(video, width, height) {
     // var elem = new FullMorphoElement(11);
     // var morphoElem = erosion(elem, dilation(elem, result.image, result.table), result.table);
     var temp = new Date().getTime();
+    var rect = sequantialDeleteConectedComponents(width, height, result.sparse, 2000);
     // var afterThresh = sequantialDeleteConectedComponents(width, height, result.sparse, 10000);
     var final = new Date().getTime() - temp;
     console.log("Time:", final, "Size: ", result.sparse.size);
     // console.log(afterThresh);
+    printRect(rect, destinationContext);
     printBinaryImage(width, height, result.binary, foregroundContext);
     // printSparseImage(width, height, afterThresh, destinationContext);
 
@@ -265,9 +273,6 @@ function filterStep(width, imageData, index, filter) {
 }
 
 function setUp(width, height) {
-    clickOnPage(22, 25);
-    // testSequantialDeleteConectedComponents();
-    return;
 
     var video = document.createElement('video');
 

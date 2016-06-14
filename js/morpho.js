@@ -150,7 +150,13 @@ function sequantialDeleteConectedComponents(width, height, sparseImage, sizeThre
         labels = [],
         labelMap = [],
         l = 1,
-        binaryImage = new BinaryImage(width, height);
+        binaryImage = new BinaryImage(width, height),
+        topPoint = new Point(width, height),
+        leftPoint = new Point(width, height),
+        bottomPoint = new Point(0, 0),
+        rightPoint = new Point(0, 0);
+
+
 
     for (var i = 0; i < sparseImage.size; i++) {
         var currentPoint = sparseImage.getPointBasedOnIndex(i),
@@ -187,7 +193,19 @@ function sequantialDeleteConectedComponents(width, height, sparseImage, sizeThre
     labels.forEach(function(arr, index) {
         if (arr.length >= sizeThreshold) {
             arr.forEach(function(point) {
-                binaryImage.data[point.y][point.x] = 1;
+                if (point.x < leftPoint.x) {
+                    leftPoint = point;
+                }
+                if (point.x > rightPoint.x) {
+                    rightPoint = point
+                }
+                if (point.y > bottomPoint.y) {
+                    bottomPoint = point;
+                }
+                if (point.y < topPoint.y) {
+                    topPoint = point;
+                }
+                // binaryImage.data[point.y][point.x] = 1;
             });
         } else {
             var sum = arr.length;
@@ -195,7 +213,19 @@ function sequantialDeleteConectedComponents(width, height, sparseImage, sizeThre
                 sum += labels[mapIndex].length;
                 if (sum >= sizeThreshold) {
                     arr.forEach(function(point) {
-                        binaryImage.data[point.y][point.x] = 1;
+                        if (point.x < leftPoint.x) {
+                            leftPoint = point;
+                        }
+                        if (point.x > rightPoint.x) {
+                            rightPoint = point
+                        }
+                        if (point.y > bottomPoint.y) {
+                            bottomPoint = point;
+                        }
+                        if (point.y < topPoint.y) {
+                            topPoint = point;
+                        }
+                        // binaryImage.data[point.y][point.x] = 1;
                     });
                     return true;
                 }
@@ -204,5 +234,9 @@ function sequantialDeleteConectedComponents(width, height, sparseImage, sizeThre
         }
 
     });
-    return binaryImage;
+    // return binaryImage;
+    var rectPoint = new Point(leftPoint.x, topPoint.y);
+    var rectWidth = rightPoint.x - leftPoint.x;
+    var rectHeight = bottomPoint.y - topPoint.y;
+    return { point: rectPoint, width: rectWidth, height: rectHeight };
 }
