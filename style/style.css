@@ -1,0 +1,42 @@
+.calculator {
+	display: none;
+    position: absolute;
+    left: calc(50% - 230px);
+    width: 460px;
+    z-index: 10;
+}
+
+.result {
+    height: 150px;
+    background-color: white;
+    border: 1px solid black;
+}
+
+
+/*.row,
+.final-row {
+    width: 460px;
+}*/
+
+.row > button {
+    width: 150px;
+    height: 150px;
+}
+
+.full-row button {
+    width: 100%;
+    height: 150px;
+}
+
+button,
+.result {
+    font-size: 30px;
+}
+
+/*#resultCanvas {
+    position: fixed;
+    top: 0px;
+    left: 0px;
+    z-index: 1;
+}
+*/

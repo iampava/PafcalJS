@@ -2,6 +2,42 @@ function _diffHelper(v, channel, diff) {
     return (v - channel) / 6 / diff + 1 / 2;
 };
 
+function hsvToRgb(pixel) {
+    var v = pixel.v / 100,
+        s = pixel.s / 100,
+        c = v * s,
+        x = c * (1 - Math.abs((Math.floor(pixel.h / 60)) % 2 - 1)),
+        m = v - c,
+        rr = undefined,
+        gg = undefined,
+        bb = undefined;
+    if (0 <= pixel.h && pixel.h < 60) {
+        rr = c;
+        gg = x;
+        bb = 0;
+    } else if (60 <= pixel.h && pixel.h < 120) {
+        rr = x;
+        gg = c;
+        bb = 0;
+    } else if (120 <= pixel.h && pixel.h < 180) {
+        rr = 0;
+        gg = c;
+        bb = x;
+    } else if (180 <= pixel.h && pixel.h < 240) {
+        rr = 0;
+        gg = x;
+        bb = c;
+    } else if (240 <= pixel.h && pixel.h < 300) {
+        rr = x;
+        gg = 0;
+        bb = c;
+    } else if (300 < pixel.h && pixel.h <= 360) {
+        rr = c;
+        gg = 0;
+        bb = x;
+    }
+    return new RGBPixel((rr + m) * 255, (gg + m) * 255, (bb + m) * 255);
+}
 /*function rgbToHsv(rgbPixel) {
     var rr = undefined,
         gg = undefined,

@@ -11,8 +11,3 @@ function clickOnPage(x, y) {
     var el = document.elementFromPoint(x, y);
     el.dispatchEvent(ev);
 }
-
-function clickButton(e) {
-    console.log(e);
-    console.log("click");
-}

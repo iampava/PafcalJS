@@ -207,3 +207,34 @@ function testSequantialDeleteConectedComponents() {
 
     console.log(sequantialDeleteConectedComponents(6, 3, image, 5));
 }
+
+function testContrastStreching() {
+    var foregroundContext = document.getElementById('foregroundCanvas').getContext('2d'),
+        destinationContext = document.getElementById('resultCanvas').getContext('2d'),
+        img = new Image(),
+        width = 800,
+        height = 600;
+
+    img.addEventListener("load", function() {
+        destinationContext.drawImage(img, 0, 0);
+        var imageData = destinationContext.getImageData(0, 0, width, height);
+        var newImageData = contrastStreching(width, height, imageData, foregroundContext);
+        foregroundContext.putImageData(newImageData, 0, 0);
+    }, false);
+    img.src = '../images/contrast.jpg'; // Set source path
+}
+
+function testConvexHull() {
+    // var binaryImage = new BinaryImage(3, 3);
+    // binaryImage.data[0][0] = 1;
+    // binaryImage.data[2][0] = 1;
+    // binaryImage.data[1][2] = 1;
+    // binaryImage.data[1][1] = 1;
+    var destinationContext = document.getElementById("resultCanvas").getContext('2d');
+    destinationContext.beginPath();
+    destinationContext.lineWidth = "6";
+    destinationContext.strokeStyle = "red";
+
+    var result = convexHull(resizeImage(BINARY_HAND_SHAPE, 9));
+    printConvexHull(result, destinationContext);
+}

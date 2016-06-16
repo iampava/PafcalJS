@@ -111,28 +111,6 @@ function getAreaValue(point1, point2, table) {
     return result;
 }
 
-function printRectangle(width, height, point, secondPoint, context) {
-    if (point.x > secondPoint.x || point.y > secondPoint.y) {
-        throw new Error("The points are not in the right order!")
-    };
-
-    var imageData = context.getImageData(0, 0, width, height),
-        rowStart = point.y,
-        rowEnd = secondPoint.y,
-        colStart = point.x,
-        colEnd = secondPoint.x;
-
-    for (var i = rowStart; i <= rowEnd; i++) {
-        for (var j = colStart; j <= colEnd; j++) {
-            imageData.data[i * width * 4 + j * 4 + 0] = 0;
-            imageData.data[i * width * 4 + j * 4 + 1] = 0;
-            imageData.data[i * width * 4 + j * 4 + 2] = 255;
-            imageData.data[i * width * 4 + j * 4 + 3] = 255;
-        }
-    }
-    context.putImageData(imageData, 0, 0);
-}
-
 function compare(image, handShape) {
     var detected = 0,
         total = image.m * image.n;
@@ -162,4 +140,23 @@ function getNeighbours(image, point, testFunction) {
         }
     }
     return neighbours;
+}
+
+function setUpTracker() {
+    var tracker = document.createElement("div");
+    tracker.id = "PAFCAL_TRACKER";
+    tracker.style.display = "none";
+    tracker.style.position = "fixed";
+    tracker.style.borderRadius = "50%";
+    tracker.style.width = TRACKER_SIZE + "px";
+    tracker.style.height = TRACKER_SIZE + "px";
+    tracker.style.background = TRACKER_COLOR;
+    tracker.style.zIndex = "11";
+
+
+    document.body.appendChild(tracker);
+}
+
+function reMap(v, min, max) {
+    return (v - min) * 1 / (max - min);
 }

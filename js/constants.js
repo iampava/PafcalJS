@@ -37,9 +37,13 @@ var HD_CONSTRAINTS = {
         }
     }
 };
-var RECOGNITIONS_PER_SECOND = 15;
+var WIDTH = 640;
+var HEIGHT = 480;
+var RECOGNITIONS_PER_SECOND = 1;
 var BACKGROUND_DATA = null;
 var NUMBER_OF_BACKGROUND_ITERATIONS = 2;
+var TRACKER_SIZE = 50;
+var TRACKER_COLOR = "green";
 
 navigator.getMedia = (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
 var HSV_THRESHOLD = {

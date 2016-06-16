@@ -205,7 +205,7 @@ function sequantialDeleteConectedComponents(width, height, sparseImage, sizeThre
                 if (point.y < topPoint.y) {
                     topPoint = point;
                 }
-                // binaryImage.data[point.y][point.x] = 1;
+                binaryImage.data[point.y][point.x] = 1;
             });
         } else {
             var sum = arr.length;
@@ -225,7 +225,7 @@ function sequantialDeleteConectedComponents(width, height, sparseImage, sizeThre
                         if (point.y < topPoint.y) {
                             topPoint = point;
                         }
-                        // binaryImage.data[point.y][point.x] = 1;
+                        binaryImage.data[point.y][point.x] = 1;
                     });
                     return true;
                 }
@@ -238,5 +238,127 @@ function sequantialDeleteConectedComponents(width, height, sparseImage, sizeThre
     var rectPoint = new Point(leftPoint.x, topPoint.y);
     var rectWidth = rightPoint.x - leftPoint.x;
     var rectHeight = bottomPoint.y - topPoint.y;
-    return { point: rectPoint, width: rectWidth, height: rectHeight };
+    if (rectWidth <= 0 || rectHeight <= 0) return null;
+    return { rect: new Rectangle(rectPoint, rectWidth, rectHeight), binary: binaryImage };
+}
+
+function contrastStreching(width, height, imageData, context) {
+    var newImageData = context.createImageData(width, height),
+        min = Infinity,
+        max = -Infinity;
+    for (var i = 0; i < imageData.data.length; i += 4) {
+        var hsvPixel = rgbToHsv(new RGBPixel(imageData.data[i], imageData.data[i + 1], imageData.data[i + 2]));
+        if (hsvPixel.v < min) min = hsvPixel.v;
+        if (hsvPixel.v > max) max = hsvPixel.v;
+    }
+
+    for (var i = 0; i < imageData.data.length; i += 4) {
+        var hsvPixel = rgbToHsv(new RGBPixel(imageData.data[i], imageData.data[i + 1], imageData.data[i + 2]));
+        hsvPixel.v = reMap(hsvPixel.v, min, max) * 100;
+        if (hsvPixel.v < 2) {
+            console.log("wut?")
+        }
+        var rgbPixel = hsvToRgb(hsvPixel);
+
+        newImageData.data[i] = rgbPixel.red;
+        newImageData.data[i + 1] = rgbPixel.green;
+        newImageData.data[i + 2] = rgbPixel.blue;
+        newImageData.data[i + 3] = 255;
+    }
+    return newImageData;
+}
+
+function convexHull(binaryImage) {
+    var leftStack = new Stack(),
+        rightStack = new Stack(),
+        left = null,
+        right = null,
+        top = undefined,
+        topTop = undefined,
+        result = [];
+
+    var foundRow = false,
+        index = 0;
+    while (!foundRow && index < binaryImage.n) {
+        for (var j = 0; j < binaryImage.m; j++) {
+            if (binaryImage.data[index][j] === 1) {
+                foundRow = true;
+                if (left === null || j < left.x) left = new Point(j, index);
+                if (right === null || j > right.x) right = new Point(j, index);
+            }
+        }
+        index++;
+    }
+    if (!foundRow) return [];
+    rightStack.push(right);
+    leftStack.push(left);
+
+
+    for (var q = index; q < binaryImage.n; q++) {
+        left = null;
+        right = null;
+        for (var j = 0; j < binaryImage.m; j++) {
+            if (binaryImage.data[q][j] === 1) {
+                if (left === null || j < left.x) left = new Point(j, q);
+                if (right === null || j > right.x) right = new Point(j, q);
+            }
+        }
+        if (left === null && right === null) continue;
+        if (leftStack.size === 1 && rightStack.size === 1) {
+            leftStack.push(left);
+            rightStack.push(right);
+            continue;
+        }
+        if (leftStack.size === 1) {
+            leftStack.push(left);
+        };
+        if (rightStack.size === 1) {
+            rightStack.push(right);
+        }
+        top = leftStack.top();
+        topTop = leftStack.topTop();
+        d = (left.x - top.x) * (topTop.y - top.y) - (left.y - top.y) * (topTop.x - top.x);
+        if (d > 0) {
+            while (leftStack.size >= 2) {
+                top = leftStack.top();
+                topTop = leftStack.topTop();
+                d = (left.x - top.x) * (topTop.y - top.y) - (left.y - top.y) * (topTop.x - top.x);
+                if (d > 0) {
+                    leftStack.pop();
+                } else break;
+            }
+            leftStack.push(left);
+        } else {
+            leftStack.push(left);
+        }
+
+
+        top = rightStack.top();
+        topTop = rightStack.topTop();
+        d = (right.x - top.x) * (topTop.y - top.y) - (right.y - top.y) * (topTop.x - top.x);
+        if (d < 0) {
+            while (rightStack.size >= 2) {
+                top = rightStack.top();
+                topTop = rightStack.topTop();
+                d = (right.x - top.x) * (topTop.y - top.y) - (right.y - top.y) * (topTop.x - top.x);
+                if (d < 0) {
+                    rightStack.pop();
+                } else break;
+            }
+            rightStack.push(right);
+        } else {
+            rightStack.push(right);
+        }
+    }
+    var rightResult = [],
+        leftResult = [];
+    while (rightStack.top() !== null) {
+        rightResult.push(rightStack.pop());
+    }
+    while (leftStack.top() !== null) {
+        leftResult.push(leftStack.pop());
+    }
+    result = leftResult.concat(rightResult.reverse())
+    return result;
+
 }

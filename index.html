@@ -3,24 +3,59 @@
 
 <head>
     <title> Method 1 - Background substraction & skin detection </title>
+    <link rel="stylesheet" href="style/style.css">
 </head>
-<!-- <body onload='recognizeHand(1280,720, "backgroundCanvas", "foregroundCanvas", "resultCanvas")'> -->
 
-<body onload='setUp(1280, 720)'>
-    <!-- <button type="button" onclick="clickButton(event)" style="position:fixed;"> Me</button> -->
-    <!-- <button type="button" onclick="clickButton(event)" >Click Me</button> -->
-    <canvas id="resultCanvas" width="1280" height="720"></canvas>
-    <canvas id="foregroundCanvas" width="1280" height="720"></canvas>
-    <button type="button" onclick="capture()"> Get Image </button>
+<body onload='setUp(1280,720)'>
+    <div class="calculator">
+        <div class="result">
+            <p id="result">
+            </p>
+        </div>
+        <div class="numbers">
+            <div class="row">
+                <button type="button" onclick="addNumber(7)"> 7 </button>
+                <button type="button" onclick="addNumber(8)"> 8</button>
+                <button type="button" onclick="addNumber(9)"> 9</button>
+            </div>
+            <div class="row">
+                <button type="button" onclick="addNumber(4)"> 4 </button>
+                <button type="button" onclick="addNumber(5)"> 5</button>
+                <button type="button" onclick="addNumber(6)"> 6</button>
+            </div>
+            <div class="row">
+                <button type="button" onclick="addNumber(1)"> 1 </button>
+                <button type="button" onclick="addNumber(2)"> 2</button>
+                <button type="button" onclick="addNumber(3)"> 3</button>
+            </div>
+            <div class="full-row">
+                <button type="button" onclick="addNumber(0)">0</button>
+            </div>
+            <div class="row">
+                <button type="button" onclick="addNumber(+)"> + </button>
+                <button type="button" onclick="addNumber(-)"> -</button>
+                <button type="button" onclick="addNumber(=)"> =</button>
+            </div>
+        </div>
+    </div>
+    <canvas id="resultCanvas" width="640" height="480"></canvas>
+    <canvas id="foregroundCanvas" width="640" height="480"></canvas>
+    <!-- <button type="button" onclick="capture()"> Get Image </button> -->
     <script type="text/javascript" src="js/constants.js"></script>
-    <script type="text/javascript" src="js/hand.js"></script>
     <script type="text/javascript" src="js/constructors.js"></script>
+    
+    <script type="text/javascript" src="js/libraries/jsfeat/jsfeat.js"></script>
+    <script type="text/javascript" src="js/libraries/jsfeat/frontalface.js"></script>
+    <script type="text/javascript" src="js/jsfeat-middleware.js"></script>
+    <!-- Ceva --> 
+    <script type="text/javascript" src="js/hand.js"></script>
     <script type="text/javascript" src="js/conversions.js"></script>
     <script type="text/javascript" src="js/helpers.js"></script>
     <script type="text/javascript" src="js/interaction.js"></script>
     <script type="text/javascript" src="js/morpho.js"></script>
     <script type="text/javascript" src="js/actions.js"></script>
     <script type="text/javascript" src="js/tests.js"></script>
+    <script type="text/javascript" src="js/client.js"></script>
 </body>
 
 </html>

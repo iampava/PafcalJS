@@ -3,6 +3,23 @@ function Point(x, y) {
     this.y = y;
 }
 
+function Rectangle(point, width, height) {
+    this.x = point.x;
+    this.y = point.y;
+    this.width = width;
+    this.height = height;
+
+    this.getMiddlePoint = function() {
+        return new Point(this.x + width / 2, this.y + this.height / 2);
+    }
+    this.contains = function(point) {
+        if (this.x <= point.x && point.x <= this.x + this.width && this.y <= point.y && point.y <= this.y + this.height) {
+            return true;
+        }
+        return false;
+    }
+}
+
 function Queue() {
     this.size = 0;
     this.first = {};
@@ -40,6 +57,29 @@ function Queue() {
     }
 }
 
+function Stack() {
+    this.size = 0;
+    this.topElement = { value: null, next: null };
+    this.push = function(element) {
+        var newElem = { value: element, next: this.topElement };
+        this.topElement = newElem;
+        this.size++;
+    }
+    this.top = function() {
+        return this.topElement.value;
+    }
+    this.topTop = function() {
+        if (this.topElement.next === null) return null;
+        return this.topElement.next.value;
+    }
+    this.pop = function() {
+        var value = this.topElement.value;
+        this.topElement = this.topElement.next;
+        this.size--;
+
+        return value;
+    }
+}
 
 function Filter(size, data) {
     if (this.size % 2 === 0) {
