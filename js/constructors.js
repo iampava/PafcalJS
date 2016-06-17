@@ -101,6 +101,7 @@ function BinaryImage(m, n) {
         if (point.y < 0 || point.y >= n) return false;
         return true;
     }
+   
 }
 //CSR method
 function SparseBinaryImage(rows) {
@@ -271,5 +272,14 @@ function FullMorphoElement(size) {
         for (var j = 0; j < size; j++) {
             this.data[i].push(1);
         }
+    }
+}
+
+function Contour() {
+    this.size = 0;
+    this.data = [];
+    this.add = function(element) {
+        this.size++;
+        this.data.push(element);
     }
 }

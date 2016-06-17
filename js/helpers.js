@@ -16,19 +16,13 @@ function printBinaryImage(width, height, image, context) {
 
     image.data.forEach(function(arr, arrIndex) {
         arr.forEach(function(value, valueIndex) {
-            var sum = arrIndex * width * 4 + valueIndex * 4;
-            imageData.data[sum + 3] = 255;
-            imageData.data[sum + 1] = 255;
+            if (value === 1) {
+                var sum = arrIndex * width * 4 + valueIndex * 4;
+                imageData.data[sum + 3] = 255;
+                imageData.data[sum + 1] = 255;
+            }
         });
     });
-    // var imageData = context.getImageData(0, 0, width, height),
-    //     length = imageData.data.length;
-    // for (var i = 0; i < length; i += 4) {
-    //     var rowIndex = Math.floor(i / 4 / width);
-    //     imageData.data[i + 3] = 255;
-    //     imageData.data[i + 1] = image.data[rowIndex][((i / 4) - rowIndex * width) % width] ? 255 : 0;
-    //     imageData.data[i + 0] = image.data[rowIndex][((i / 4) - rowIndex * width) % width] ? 0 : 255;
-    // }
     context.putImageData(imageData, 0, 0);
 }
 
@@ -159,4 +153,16 @@ function setUpTracker() {
 
 function reMap(v, min, max) {
     return (v - min) * 1 / (max - min);
+}
+
+function neighbour_8(point, secondPoint) {
+    if (Math.abs(point.x - secondPoint.x) > 1) return false;
+    if (Math.abs(point.y - secondPoint.y) > 1) return false;
+    return true;
+}
+
+function pointDist(point, secondPoint) {
+    var aa = (secondPoint.x - point.x),
+        bb = (secondPoint.y - point.y);
+    return Math.sqrt(aa * aa + bb * bb);
 }

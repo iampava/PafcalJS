@@ -238,3 +238,30 @@ function testConvexHull() {
     var result = convexHull(resizeImage(BINARY_HAND_SHAPE, 9));
     printConvexHull(result, destinationContext);
 }
+
+function testCentroid() {
+    var contourArray = [new Point(2, 2), new Point(4, 2), new Point(4, 0), new Point(3, -1), new Point(2, 0)],
+        contour = { size: 5, data: contourArray };
+    var center = centroid(contour);
+    console.log(center);
+}
+
+function testGetContour() {
+    var ctx = document.getElementById('resultCanvas').getContext('2d');
+    var binaryImage = resizeImage(BINARY_HAND_SHAPE, 9);
+    var lookupTable = new BinaryLookupTableFromImage(binaryImage);
+
+    var contour = getContour(new FullMorphoElement(3), binaryImage, lookupTable);
+    // printBinaryImage(640, 480, binaryImage, ctx);
+    ctx.beginPath();
+    ctx.lineWidth = "1";
+    ctx.strokeStyle = "green";
+    ctx.moveTo(contour.data[0].x, contour.data[0].y);
+    for (var i = 1; i < contour.data.length; i++) {
+        // ctx.fillRect(contour.data[i].x, contour.data[i].y, 1, 1);
+        ctx.lineTo(contour.data[i].x, contour.data[i].y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+
+}

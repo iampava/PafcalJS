@@ -99,6 +99,8 @@ function backgroundAndSkinDetection(width, height, background, image, faceRect) 
         if (!faceRect) {
             logic = rgbSkinDetection(imagePixel) && hsvSkinDetection(rgbToHsv(imagePixel));
         } else {
+            faceRect.y -= height / 2;
+            faceRect.height *= 2;
             logic = !faceRect.contains(new Point(colIndex, rowIndex)) && rgbSkinDetection(imagePixel) && hsvSkinDetection(rgbToHsv(imagePixel));
         }
 
@@ -166,6 +168,14 @@ function printConvexHull(points, ctx) {
     }
     ctx.closePath();
     ctx.stroke();
+
+    var contour = {
+        size: points.length,
+        data: points
+    };
+    var center = centroid(contour);
+    detectHandStatus(points, center, ctx);
+    // ctx.fillRect(center.x - 5, center.y - 5, 10, 10);
 }
 
 function trackHand(width, height, rect, ctx) {
@@ -231,9 +241,13 @@ function recognizeHand() {
     // return;
     var faceRect = getFaceRect(width, height, video, destinationContext);
     result = backgroundAndSkinDetection(width, height, BACKGROUND_DATA, imageData, faceRect);
-    var componentResult = sequantialDeleteConectedComponents(width, height, result.sparse, 500);
-
+    var componentResult = sequantialDeleteConectedComponents(width, height, result.sparse, 300);
+    // var blt = new BinaryLookupTableFromImage(componentResult.binary);
+    // var dilationMatrix = dilation(new FullMorphoElement(11), componentResult.binary, blt);
     if (componentResult === null) return;
+
+    // printBinaryImage(width, height, dilationMatrix, destinationContext);
+    // printConvexHull(convexHull(dilationMatrix), destinationContext);
 
     printBinaryImage(width, height, componentResult.binary, destinationContext);
     printConvexHull(convexHull(componentResult.binary), destinationContext);

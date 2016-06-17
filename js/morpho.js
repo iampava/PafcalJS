@@ -8,9 +8,9 @@ function erosion(element, binaryImage, lookupTable) {
         for (var j = tempSize; j < binaryImage.m - tempSize - 1; j++) {
             var sum = getAreaValue(new Point(j - tempSize, i - tempSize), new Point(j + tempSize, i + tempSize), lookupTable);
             if (sum === element.size * element.size) {
-                resultImage.data[i].push(1);
+                resultImage.data[i][j] = 1;
             } else {
-                resultImage.data[i].push(0);
+                resultImage.data[i][j] = 0;
             }
         }
     }
@@ -193,18 +193,6 @@ function sequantialDeleteConectedComponents(width, height, sparseImage, sizeThre
     labels.forEach(function(arr, index) {
         if (arr.length >= sizeThreshold) {
             arr.forEach(function(point) {
-                if (point.x < leftPoint.x) {
-                    leftPoint = point;
-                }
-                if (point.x > rightPoint.x) {
-                    rightPoint = point
-                }
-                if (point.y > bottomPoint.y) {
-                    bottomPoint = point;
-                }
-                if (point.y < topPoint.y) {
-                    topPoint = point;
-                }
                 binaryImage.data[point.y][point.x] = 1;
             });
         } else {
@@ -213,18 +201,6 @@ function sequantialDeleteConectedComponents(width, height, sparseImage, sizeThre
                 sum += labels[mapIndex].length;
                 if (sum >= sizeThreshold) {
                     arr.forEach(function(point) {
-                        if (point.x < leftPoint.x) {
-                            leftPoint = point;
-                        }
-                        if (point.x > rightPoint.x) {
-                            rightPoint = point
-                        }
-                        if (point.y > bottomPoint.y) {
-                            bottomPoint = point;
-                        }
-                        if (point.y < topPoint.y) {
-                            topPoint = point;
-                        }
                         binaryImage.data[point.y][point.x] = 1;
                     });
                     return true;
@@ -234,12 +210,8 @@ function sequantialDeleteConectedComponents(width, height, sparseImage, sizeThre
         }
 
     });
-    // return binaryImage;
-    var rectPoint = new Point(leftPoint.x, topPoint.y);
-    var rectWidth = rightPoint.x - leftPoint.x;
-    var rectHeight = bottomPoint.y - topPoint.y;
-    if (rectWidth <= 0 || rectHeight <= 0) return null;
-    return { rect: new Rectangle(rectPoint, rectWidth, rectHeight), binary: binaryImage };
+
+    return { binary: binaryImage };
 }
 
 function contrastStreching(width, height, imageData, context) {
@@ -328,7 +300,7 @@ function convexHull(binaryImage) {
                 } else break;
             }
             leftStack.push(left);
-        } else {
+        } else if (d < 0) {
             leftStack.push(left);
         }
 
@@ -346,7 +318,7 @@ function convexHull(binaryImage) {
                 } else break;
             }
             rightStack.push(right);
-        } else {
+        } else if (d > 0) {
             rightStack.push(right);
         }
     }
@@ -362,3 +334,52 @@ function convexHull(binaryImage) {
     return result;
 
 }
+
+function centroid(contour) {
+    var cx = 0,
+        cy = 0,
+        signedArea = 0,
+        temp = undefined;
+    for (var i = 0; i < contour.size - 2; i++) {
+        temp = contour.data[i].x * contour.data[i + 1].y - contour.data[i + 1].x * contour.data[i].y;
+        cx += (contour.data[i].x + contour.data[i + 1].x) * temp;
+        cy += (contour.data[i].y + contour.data[i + 1].y) * temp;
+        signedArea += temp;
+    }
+    temp = contour.data[i].x * contour.data[0].y - contour.data[0].x * contour.data[i].y;
+    cx += (contour.data[i].x + contour.data[0].x) * temp;
+    cy += (contour.data[i].y + contour.data[0].y) * temp;
+    signedArea += temp;
+
+    signedArea /= 2;
+    cx = cx / (6 * signedArea);
+    cy = cy / (6 * signedArea);
+
+    return new Point(cx, cy);
+}
+
+// function getContour(morphoElement, binaryImage, lookupTable) {
+//     var contour = new Contour(),
+//         erodedMatrix = erosion(morphoElement, binaryImage, lookupTable);
+//     for (var i = 0; i < binaryImage.n; i++) {
+//         for (var j = 0; j < binaryImage.m; j++) {
+//             if (binaryImage.data[i][j] === 1 && erodedMatrix.data[i][j] !== 1) contour.add(new Point(j, i));
+//         }
+//     }
+//     var orderedPixels = [contour.data[0]];
+//     while (orderedPixels.length < contour.data.length) {
+//         var currentLength = 1;
+//         for (var j = 0; j < contour.size; j++) {
+//             if (orderedPixels.indexOf(contour.data[j]) !== -1) continue;
+//             if (neighbour_8(orderedPixels[orderedPixels.length - 1], contour.data[j])) {
+//                 orderedPixels.push(contour.data[j]);
+//                 break;
+//             }
+
+//         }
+//         if (currentLength === orderedPixels.length) break;
+
+//     }
+//     contour.data = orderedPixels;
+//     return contour;
+// }

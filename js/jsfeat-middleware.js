@@ -59,6 +59,7 @@ function draw_faces(ctx, rects, sc, max) {
             return (b.confidence < a.confidence);
         })
     }
+    if (rects.length === 0) return null;
     return new Rectangle(new Point(rects[0].x * sc | 0, rects[0].y * sc | 0), rects[0].width * sc | 0, rects[0].height * sc | 0);
     // rects[0];
     // var n = max || on;
