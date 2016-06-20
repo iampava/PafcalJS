@@ -372,7 +372,9 @@ function filterStep(width, imageData, index, filter) {
 }
 
 function setUp(width, height) {
-
+    // testDrawImage();
+    return;
+    
     setUpTracker();
     var video = document.createElement('video');
 

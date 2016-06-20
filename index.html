@@ -6,7 +6,7 @@
     <link rel="stylesheet" href="style/style.css">
 </head>
 
-<body onload='setUp(1280,720)'>
+<body onload='pafcal.start(1280,720)'>
     <div class="calculator">
         <div class="result">
             <p id="result">
@@ -40,14 +40,14 @@
     </div>
     <canvas id="resultCanvas" width="640" height="480"></canvas>
     <canvas id="foregroundCanvas" width="640" height="480"></canvas>
+    <script type="text/javascript" src="js/pafcal/pafcal.main.js"></script>
     <!-- <button type="button" onclick="capture()"> Get Image </button> -->
-    <script type="text/javascript" src="js/constants.js"></script>
+    <!-- <script type="text/javascript" src="js/constants.js"></script>
     <script type="text/javascript" src="js/constructors.js"></script>
-    
     <script type="text/javascript" src="js/libraries/jsfeat/jsfeat.js"></script>
     <script type="text/javascript" src="js/libraries/jsfeat/frontalface.js"></script>
     <script type="text/javascript" src="js/jsfeat-middleware.js"></script>
-    <!-- Ceva --> 
+    <!-- Ceva -->
     <script type="text/javascript" src="js/hand.js"></script>
     <script type="text/javascript" src="js/conversions.js"></script>
     <script type="text/javascript" src="js/helpers.js"></script>

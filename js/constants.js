@@ -39,7 +39,6 @@ var HD_CONSTRAINTS = {
 };
 var WIDTH = 640;
 var HEIGHT = 480;
-var RECOGNITIONS_PER_SECOND = 1;
 var BACKGROUND_DATA = null;
 var NUMBER_OF_BACKGROUND_ITERATIONS = 2;
 var TRACKER_SIZE = 50;
@@ -63,6 +62,7 @@ var HSV_THRESHOLD = {
         MAX: 100
     }]
 };
+
 var LOW_PASS_FILTER = [
     [1 / 16, 1 / 8, 1 / 16],
     [1 / 8, 1 / 4, 1 / 8],

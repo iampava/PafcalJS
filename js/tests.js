@@ -265,3 +265,10 @@ function testGetContour() {
     ctx.stroke();
 
 }
+
+function testDrawImage() {
+    var image = resizeImage(BINARY_HAND_SHAPE, 3);
+    var ctx = document.getElementById('resultCanvas').getContext('2d');
+
+    printBinaryImage(600, 480, image, ctx);
+}

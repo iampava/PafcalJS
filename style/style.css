@@ -1,9 +1,8 @@
 .calculator {
-	display: none;
+	/*display: none;*/
     position: absolute;
     left: calc(50% - 230px);
     width: 460px;
-    z-index: 10;
 }
 
 .result {
