@@ -15,10 +15,6 @@ pafcal.constants = {
     },
     BACKGROUND_FRAMES: 20,
     TRACKER_SIZE: 30,
-    MOVE_COLOR: '#00CC66',
-    CLICK_COLOR: '#0080FF',
-    MISS_COLOR: '#FF8000',
-    BACKGROUND_COLOR: '#C0C0C0',
     BACKGROUND_SUBSTRACTION: true
 }
 

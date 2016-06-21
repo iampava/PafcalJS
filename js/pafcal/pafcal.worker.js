@@ -12,6 +12,7 @@ pafcal.constants = {
         }
     },
     BACKGROUND_FRAMES: 20,
+    SIZE_THRESHOLD: 500,
     TRACKER_SIZE: 20,
     HSV_THRESHOLD: {
         HUE: [{
@@ -37,6 +38,18 @@ pafcal.constants = {
     BACKGROUND_SUBSTRACTION: true,
     BACKGROUND_DATA: {
         data: []
+    },
+
+    JS_FEAT: {
+        OPTONS: {
+            min_scale: 2,
+            scale_factor: 1.15,
+            use_canny: false,
+            edges_density: 0.13,
+            equalize_histogram: true
+        },
+        CLASSIFIER: jsfeat.haar.frontalface,
+        MAX_WORK_SIZE: 160;
     }
 }
 
@@ -113,11 +126,61 @@ onmessage = function(e) {
 
 }
 
+pafcal.step = function(image) {
+    var faceResult = null,
+        filterResult = null,
+        morphoResult = null,
+        deleteResult = null,
+        scale = Math.min(pafcal.constants.JS_FEAT.MAX_WORK_SIZE / pafcal.constants.WIDTH, pafcal.constants.JS_FEAT.MAX_WORK_SIZE / pafcal.constants.HEIGHT),
+        w = (pafcal.constants.WIDTH * scale) | 0,
+        h = (pafcal.constants.HEIGHT * scale) | 0;
+
+    faceResult = pafcal.faceDetection(w, h, image, pafcal.constants.JS_FEAT.CLASSIFIER, pafcal.constants.JS_FEAT.OPTONS);
+    filterResult = pafcal.filter(pafcal.constants.WIDTH, pafcal.constants.HEIGHT, image, faceResult);
+    morphoResult = pafcal.morpho(filterResult);
+    deleteResult = pafcal.delete(pafcal.constants.WIDTH, pafcal.constants.HEIGHT, morphoResult, pafcal.constants.SIZE_THRESHOLD);
+
+    if (deleteResult === null) {
+        //no detection
+        return;
+    } else {
+        //we have some detection
+        var convexHull = pafcal.convexHull(deleteResult);
+        var centroid = pafcal.centroid(convexHull);
+
+        pafcal.decide(centroid, convexHull);
+    }
+
+}
+
+pafcal.faceDetection = function(w, h, image, classifier, options) {
+    var ii_sum = new Int32Array((w + 1) * (h + 1)),
+        ii_sqsum = new Int32Array((w + 1) * (h + 1)),
+        ii_tilted = new Int32Array((w + 1) * (h + 1)),
+        ii_canny = new Int32Array((w + 1) * (h + 1)),
+        rects = null;
 
 
-pafcal.faceDetection = function(image) {
-    //detecteaza fata si trime-o la functia de mai jos
-    pafcal.filter(image, null);
+    img_u8 = new jsfeat.matrix_t(w, h, jsfeat.U8_t | jsfeat.C1_t);
+    jsfeat.imgproc.grayscale(image.data, w, h, img_u8);
+
+    if (options.equalize_histogram) {
+        jsfeat.imgproc.equalize_histogram(img_u8, img_u8);
+    }
+
+    jsfeat.imgproc.compute_integral_image(img_u8, ii_sum, ii_sqsum, classifier.tilted ? ii_tilted : null);
+
+    if (options.use_canny) {
+        jsfeat.imgproc.canny(img_u8, edg, 10, 50);
+        jsfeat.imgproc.compute_integral_image(edg, ii_canny, null, null);
+    }
+
+    jsfeat.haar.edges_density = options.edges_density;
+    var rects = jsfeat.haar.detect_multi_scale(ii_sum, ii_sqsum, ii_tilted, options.use_canny ? ii_canny : null, img_u8.cols, img_u8.rows, classifier, options.scale_factor, options.min_scale);
+    rects = jsfeat.haar.group_rectangles(rects, 1);
+
+
+    return _getBestRect(rects, width / img_u8.cols);
 
 }
 
@@ -148,7 +211,6 @@ pafcal.filter = function(width, height, image, faceRect) {
         // binaryLookupTable.data[rowIndex].push(computeBinaryLookupValue(rowIndex, binaryImage.data[rowIndex].length - 1, logic, binaryLookupTable));
     }
     return { sparse: sparseImage, binary: binaryImage, table: binaryLookupTable };
-    pafcal.morpho();
 
 }
 
@@ -343,5 +405,23 @@ pafcal.centroid = function(contour) {
 }
 
 pafcal.decide = function() {
+
+}
+
+
+function _getBestRect(rects, scale) {
+    var length = rects.length,
+        max = -Infinity,
+        best = undefined;
+
+    if (length === 0) return null;
+    for (var i = 0; i < length; i++) {
+        if (rects[i].confidence > max) {
+            max = rects[i].confidence;
+            best = rects[i];
+        }
+    }
+
+    return new Rectangle(new Point(best.x * scale | 0, best.y * scale | 0), best.width * scale | 0, best.height * scale | 0);
 
 }
