@@ -1,6 +1,7 @@
 navigator.getMedia = (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
 var pafcal = {};
 pafcal.canvas = document.createElement("canvas");
+pafcal.tempCanvas = document.createElement("canvas");
 
 pafcal.constants = {
     WIDTH: 640,
@@ -13,10 +14,11 @@ pafcal.constants = {
             }
         }
     },
-    TIME: 5000,
+    TIME: 1000,
     BACKGROUND_FRAMES: 20,
     TRACKER_SIZE: 30,
-    BACKGROUND_SUBSTRACTION: true
+    BACKGROUND_SUBSTRACTION: true,
+    BACKGROUND_COLOR: '#C0C0C0'
 };
 
 if (window.Worker) {
@@ -76,8 +78,17 @@ if (window.Worker) {
 
     pafcal.setUpCommunications = function(e) {
         switch (e.data.type) {
+            case 'FACE':
+                var canvas = document.getElementById("resultCanvas");
+                var ctx = canvas.getContext('2d');
+                ctx.beginPath();
+                ctx.lineWidth = "1";
+                ctx.strokeStyle = "red";
+                ctx.rect(e.data.data.x, e.data.data.y, e.data.data.width, e.data.data.height);
+                ctx.stroke();
+                break;
             case 'IMAGE':
-                _sendImage(worker);
+                _sendImage('IMAGE', worker);
                 break;
             case 'MOVE':
                 pafcal.showTracker(e.data.data, e.data.color);
@@ -159,7 +170,7 @@ function _setUpRecording(worker) {
 };
 
 function _startCountdown(worker) {
-    var seconds = 5,
+    var seconds = Math.floor(pafcal.constants.TIME / 1000),
         interval = null;
 
     interval = window.setInterval(function() {
@@ -184,7 +195,7 @@ function _showCountdown(worker, seconds) {
             iterations++;
             if (iterations === pafcal.constants.BACKGROUND_FRAMES) {
                 clearInterval(interval);
-                _sendImage('FINAl_BACKGROUND_IMAGE', worker);
+                _sendImage('FINAL_BACKGROUND_IMAGE', worker);
                 _deleteBackground();
             } else {
                 _sendImage('BACKGROUND_IMAGE', worker);
@@ -201,9 +212,48 @@ function _deleteBackground() {
 };
 
 function _sendImage(type, worker) {
-    var imageData = null;
+    console.log("sendImage");
+    var imageData = null,
+        faceData = null,
+        scale = Math.min(160 / pafcal.constants.WIDTH, 160 / pafcal.constants.HEIGHT),
+        w = (pafcal.constants.WIDTH * scale) | 0,
+        h = (pafcal.constants.HEIGHT * scale) | 0;
+
+    pafcal.tempCanvas.width = w;
+    pafcal.tempCanvas.height = h;
+
     pafcal.canvas.getContext("2d").drawImage(pafcal.video, 0, 0, pafcal.constants.WIDTH, pafcal.constants.HEIGHT);
     imageData = pafcal.canvas.getContext("2d").getImageData(0, 0, pafcal.constants.WIDTH, pafcal.constants.HEIGHT);
 
-    worker.postMessage({ type: type, data: imageData });
+    pafcal.tempCanvas.getContext("2d").drawImage(pafcal.video, 0, 0, w, h);
+    faceData = pafcal.tempCanvas.getContext("2d").getImageData(0, 0, w, h);
+
+
+
+
+    if (type === 'IMAGE') {
+        worker.postMessage({ type: type, data: { image: imageData, jsfeat: faceData } });
+    } else {
+        worker.postMessage({ type: type, data: imageData });
+    }
+};
+
+function _getBestRect(rects, scale) {
+    var length = rects.length,
+        max = -Infinity,
+        best = undefined;
+
+    if (length === 0) return null;
+    for (var i = 0; i < length; i++) {
+        if (rects[i].confidence > max) {
+            max = rects[i].confidence;
+            best = rects[i];
+        }
+    }
+
+    // var rect = new Rectangle(new Point(best.x * scale | 0, best.y * scale | 0), best.width * scale | 0, best.height * scale | 0);
+
+    // postMessage({ type: 'FACE', data: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
+
+    return new Rectangle(new Point(best.x * scale | 0, best.y * scale | 0), best.width * scale | 0, best.height * scale | 0);
 };

@@ -1,3 +1,7 @@
+self.importScripts('./jsfeat.js');
+self.importScripts('./pafcal.external.js');
+self.importScripts('./pafcal.structures.js');
+
 var pafcal = {};
 pafcal.constants = {
     WIDTH: 640,
@@ -47,7 +51,7 @@ pafcal.constants = {
             equalize_histogram: true
         },
         CLASSIFIER: jsfeat.haar.frontalface,
-        MAX_WORK_SIZE: 160;
+        MAX_WORK_SIZE: 160
     },
 };
 
@@ -65,7 +69,7 @@ pafcal.modelBackground = function(imageData) {
     }
 };
 
-pafcal.step = function(image) {
+pafcal.step = function(image, haarData) {
     var faceResult = null,
         filterResult = null,
         morphoResult = null,
@@ -74,7 +78,10 @@ pafcal.step = function(image) {
         w = (pafcal.constants.WIDTH * scale) | 0,
         h = (pafcal.constants.HEIGHT * scale) | 0;
 
-    faceResult = pafcal.faceDetection(w, h, image, pafcal.constants.JS_FEAT.CLASSIFIER, pafcal.constants.JS_FEAT.OPTONS);
+    faceResult = pafcal.faceDetection(w, h, haarData, pafcal.constants.JS_FEAT.CLASSIFIER, pafcal.constants.JS_FEAT.OPTONS);
+    postMessage({ type: 'IMAGE', data: null });
+    return;
+
     filterResult = pafcal.filter(pafcal.constants.WIDTH, pafcal.constants.HEIGHT, image, faceResult);
     morphoResult = pafcal.morpho(pafcal.constants.WIDTH, pafcal.constants.HEIGHT, filterResult.sparse, filterResult.table);
     deleteResult = pafcal.delete(morphoResult, pafcal.constants.SIZE_THRESHOLD);
@@ -117,7 +124,7 @@ pafcal.faceDetection = function(w, h, image, classifier, options) {
     rects = jsfeat.haar.group_rectangles(rects, 1);
 
 
-    return _getBestRect(rects, width / img_u8.cols);
+    return _getBestRect(rects, pafcal.constants.WIDTH / img_u8.cols);
 };
 
 pafcal.filter = function(width, height, image, faceRect) {
@@ -344,6 +351,10 @@ function _getBestRect(rects, scale) {
         }
     }
 
+    var rect = new Rectangle(new Point(best.x * scale | 0, best.y * scale | 0), best.width * scale | 0, best.height * scale | 0);
+
+    postMessage({ type: 'FACE', data: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
+
     return new Rectangle(new Point(best.x * scale | 0, best.y * scale | 0), best.width * scale | 0, best.height * scale | 0);
 };
 
@@ -389,17 +400,18 @@ onmessage = function(e) {
             pafcal.configure(e.data.data);
             break;
         case 'IMAGE':
-            // pafcal.step(e.data.data);
+            pafcal.step(e.data.data.image, e.data.data.jsfeat);
             break;
         case 'BACKGROUND_IMAGE':
             pafcal.modelBackground(e.data.data);
             break;
-        case 'FINAl_BACKGROUND_IMAGE':
+        case 'FINAL_BACKGROUND_IMAGE':
             var temp = new Uint8ClampedArray(pafcal.constants.WIDTH * pafcal.constants.HEIGHT * 4);
             for (var i = 0; i < pafcal.constants.BACKGROUND_DATA.length; i++) {
                 temp[i] = pafcal.constants.BACKGROUND_DATA[i] / pafcal.constants.BACKGROUND_FRAMES;
             }
             pafcal.constants.BACKGROUND_DATA = temp;
+            postMessage({ type: 'IMAGE', data: null });
             break;
         default:
             break;
