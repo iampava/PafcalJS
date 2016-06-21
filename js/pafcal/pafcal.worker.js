@@ -1,4 +1,4 @@
-var pafcal = {}
+var pafcal = {};
 pafcal.constants = {
     WIDTH: 640,
     HEIGHT: 480,
@@ -36,9 +36,7 @@ pafcal.constants = {
     MISS_COLOR: '#FF8000',
     BACKGROUND_COLOR: '#C0C0C0',
     BACKGROUND_SUBSTRACTION: true,
-    BACKGROUND_DATA: {
-        data: []
-    },
+    BACKGROUND_DATA: [],
 
     JS_FEAT: {
         OPTONS: {
@@ -50,17 +48,8 @@ pafcal.constants = {
         },
         CLASSIFIER: jsfeat.haar.frontalface,
         MAX_WORK_SIZE: 160;
-    }
-}
-
-
-
-
-pafcal.start = function() {
-    if (pafcal.constants.BACKGROUND_SUBSTRACTION === true) {
-        pafcal.background();
-    }
-}
+    },
+};
 
 pafcal.configure = function() {
     for (var property in object) {
@@ -68,63 +57,13 @@ pafcal.configure = function() {
             pafcal.constants[property] = object[property];
         }
     }
-    postMessage({ type: 'CONFIG', data: null });
-}
-
-
-
-pafcal.notifyBackground = function() {
-
-}
-pafcal.background = function() {
-    var seconds = 5,
-        interval = null;
-
-    interval = self.setInterval(function() {
-        postMessage({ type: 'BACKGROUND_SECOND', data: seconds });
-        if (seconds === 0) clearInterval(interval);
-        seconds--;
-
-    }, 1000)
-}
+};
 
 pafcal.modelBackground = function(imageData) {
     for (var i = 0; i < imageData.data.length; i++) {
-        pafcal.constants.BACKGROUND_DATA.data[i] += imageData.data[i];
+        pafcal.constants.BACKGROUND_DATA[i] += imageData.data[i];
     }
-}
-
-
-
-
-onmessage = function(e) {
-
-    switch (e.data.type) {
-        case 'START':
-            pafcal.start();
-            break;
-        case 'CONFIG':
-            pafcal.configure(e.data.data);
-            break;
-        case 'BACKGROUND_IMAGE':
-            pafcal.modelBackground(e.data.data);
-            break;
-        case 'IMAGE':
-            pafcal.faceDetection();
-            break;
-        case 'BACKGROUND_FINISH':
-            var temp = new Uint8ClampedArray(pafcal.constants.WIDTH * pafcal.constants.HEIGHT * 4);
-            for (var i = 0; i < pafcal.constants.BACKGROUND_DATA.data.length; i++) {
-                temp[i] = pafcal.constants.BACKGROUND_DATA.data[i] / pafcal.constants.BACKGROUND_FRAMES;
-            }
-            pafcal.constants.BACKGROUND_DATA.data = temp;
-            break;
-        default:
-            postMessage({ type: 'CLICK', data: { x: 400, y: 200 }, color: pafcal.constants.CLICK_COLOR });
-            break;
-    }
-
-}
+};
 
 pafcal.step = function(image) {
     var faceResult = null,
@@ -137,21 +76,19 @@ pafcal.step = function(image) {
 
     faceResult = pafcal.faceDetection(w, h, image, pafcal.constants.JS_FEAT.CLASSIFIER, pafcal.constants.JS_FEAT.OPTONS);
     filterResult = pafcal.filter(pafcal.constants.WIDTH, pafcal.constants.HEIGHT, image, faceResult);
-    morphoResult = pafcal.morpho(filterResult);
-    deleteResult = pafcal.delete(pafcal.constants.WIDTH, pafcal.constants.HEIGHT, morphoResult, pafcal.constants.SIZE_THRESHOLD);
+    morphoResult = pafcal.morpho(pafcal.constants.WIDTH, pafcal.constants.HEIGHT, filterResult.sparse, filterResult.table);
+    deleteResult = pafcal.delete(morphoResult, pafcal.constants.SIZE_THRESHOLD);
 
     if (deleteResult === null) {
-        //no detection
-        return;
+        postMessage({ type: 'MISS', data: null });
     } else {
-        //we have some detection
         var convexHull = pafcal.convexHull(deleteResult);
         var centroid = pafcal.centroid(convexHull);
 
         pafcal.decide(centroid, convexHull);
     }
-
-}
+    postMessage({ type: 'IMAGE', data: null })
+};
 
 pafcal.faceDetection = function(w, h, image, classifier, options) {
     var ii_sum = new Int32Array((w + 1) * (h + 1)),
@@ -181,14 +118,13 @@ pafcal.faceDetection = function(w, h, image, classifier, options) {
 
 
     return _getBestRect(rects, width / img_u8.cols);
-
-}
-
+};
 
 pafcal.filter = function(width, height, image, faceRect) {
     var sparseImage = new SparseBinaryImage(height),
-        binaryImage = new BinaryImage(width, height),
-        binaryLookupTable = new BinaryLookupTable(width, height);
+        binaryLookupTable = new BinaryLookupTable(width, height),
+        background = pafcal.constants.BACKGROUND_DATA.data;
+
     length = image.data.length;
     for (var i = 0; i < length; i += 4) {
         var backgroundPixel = new RGBPixel(background.data[i], background.data[i + 1], background.data[i + 2]),
@@ -196,179 +132,151 @@ pafcal.filter = function(width, height, image, faceRect) {
             rowIndex = Math.floor((i / 4) / width),
             colIndex = Math.floor((i / 4) % width);
         if (!faceRect) {
-            logic = rgbSkinDetection(imagePixel) && hsvSkinDetection(rgbToHsv(imagePixel));
+            logic = _backgroundThreshold(THRESHOLD, backgroundPixel, imagePixel) && _rgbSkinDetection(imagePixel) && _hsvSkinDetection(rgbToHsv(imagePixel));
         } else {
             faceRect.y -= height / 2;
             faceRect.height *= 2;
-            logic = !faceRect.contains(new Point(colIndex, rowIndex)) && rgbSkinDetection(imagePixel) && hsvSkinDetection(rgbToHsv(imagePixel));
+            logic = !faceRect.contains(new Point(colIndex, rowIndex)) && _backgroundThreshold(THRESHOLD, backgroundPixel, imagePixel) && _rgbSkinDetection(imagePixel) && _hsvSkinDetection(rgbToHsv(imagePixel));
         }
 
         if (logic) {
             sparseImage.add(rowIndex, colIndex);
-            binaryImage.data[rowIndex][colIndex] = 1;
-
+            binaryLookupTable.data[rowIndex].push(computeBinaryLookupValue(rowIndex, 1, logic, binaryLookupTable));
+        } else {
+            binaryLookupTable.data[rowIndex].push(computeBinaryLookupValue(rowIndex, 0, logic, binaryLookupTable));
         }
-        // binaryLookupTable.data[rowIndex].push(computeBinaryLookupValue(rowIndex, binaryImage.data[rowIndex].length - 1, logic, binaryLookupTable));
     }
-    return { sparse: sparseImage, binary: binaryImage, table: binaryLookupTable };
+    return { sparse: sparseImage, table: binaryLookupTable };
+};
 
-}
+pafcal.morpho = function(width, height, sparseImage, lookupTable) {
+    var morphoElement = new FullMorphoElement(21);
+    return _erosion(morphoElement, _dilation(width, height, morphoElement, sparseImage, lookupTable), lookupTable);
+};
 
-pafcal.morpho = function(width, height, binaryImage, lookupTable) {
-    pafcal.delete();
-}
-
-pafcal.delete = function(width, height, sparseImage, sizeThreshold) {
+pafcal.delete = function(sparseImage, sizeThreshold) {
     var indexLabel = [],
         labels = [],
         labelMap = [],
-        l = 1,
-        binaryImage = new BinaryImage(width, height),
-        topPoint = new Point(width, height),
-        leftPoint = new Point(width, height),
-        bottomPoint = new Point(0, 0),
-        rightPoint = new Point(0, 0);
-
-
+        resultImage = new SparseBinaryImage(sparseImage.row.length - 1),
+        l = 1;
 
     for (var i = 0; i < sparseImage.size; i++) {
         var currentPoint = sparseImage.getPointBasedOnIndex(i),
             top = indexLabel[sparseImage.getIndexBasedOnPoint(new Point(currentPoint.x, currentPoint.y - 1))],
             left = indexLabel[sparseImage.getIndexBasedOnPoint(new Point(currentPoint.x - 1, currentPoint.y))];
 
-        if (top > 0 && (left === undefined || top === left)) {
-            indexLabel[i] = top;
-            labels[top].push(currentPoint);
-            continue;
-        }
-        if (left > 0 && top === undefined) {
-            indexLabel[i] = left;
-            labels[left].push(currentPoint);
-            continue;
-        }
         if (left === undefined && top === undefined) {
-            labels[l] = [];
+            labels[l] = 1;
             labelMap[l] = [];
-            labels[l].push(currentPoint);
             indexLabel[i] = l;
             l++;
             continue;
         }
 
+        if (top > 0 && (left === undefined || top === left)) {
+            labels[top]++;
+            indexLabel[i] = top;
+            continue;
+        }
+
+        if (left > 0 && top === undefined) {
+            labels[left]++;
+            indexLabel[i] = left;
+            continue;
+        }
+
         if (top !== left) {
-            labels[top].push(currentPoint);
+            labels[top]++;
             indexLabel[i] = top;
             labelMap[top].push(left);
             labelMap[left].push(top);
             continue;
         }
     }
-    labels.forEach(function(arr, index) {
-        if (arr.length >= sizeThreshold) {
-            arr.forEach(function(point) {
-                binaryImage.data[point.y][point.x] = 1;
-            });
-        } else {
-            var sum = arr.length;
-            labelMap[index].some(function(mapIndex) {
-                sum += labels[mapIndex].length;
-                if (sum >= sizeThreshold) {
-                    arr.forEach(function(point) {
-                        binaryImage.data[point.y][point.x] = 1;
-                    });
-                    return true;
-                }
-            })
 
+    for (var i = 0; i < sparseImage.size; i++) {
+        var sum = labels[indexLabel[i]];
+        if (sum >= sizeThreshold) {
+            var point = sparseImage.getPointBasedOnIndex(i);
+            resultImage.add(point.y, point.x);
+            continue;
         }
+        labelMap[indexLabel[i]].some(function(mapIndex) {
+            sum += labels[mapIndex];
+            if (sum >= sizeThreshold) {
+                var point = sparseImage.getPointBasedOnIndex(i);
+                resultImage.add(point.y, point.x);
+                return true;
+            }
+        })
+    }
+    return resultImage;
+};
 
-    });
-
-    return { binary: binaryImage };
-    pafcal.convexHull();
-}
-pafcal.convexHull = function(binaryImage) {
+pafcal.convexHull = function(sparseImage) {
     var leftStack = new Stack(),
         rightStack = new Stack(),
         left = null,
         right = null,
-        top = undefined,
-        topTop = undefined,
-        result = [];
-
-    var foundRow = false,
+        top = null,
+        topTop = null,
+        result = [],
         index = 0;
-    while (!foundRow && index < binaryImage.n) {
-        for (var j = 0; j < binaryImage.m; j++) {
-            if (binaryImage.data[index][j] === 1) {
-                foundRow = true;
-                if (left === null || j < left.x) left = new Point(j, index);
-                if (right === null || j > right.x) right = new Point(j, index);
-            }
-        }
-        index++;
-    }
-    if (!foundRow) return [];
-    rightStack.push(right);
-    leftStack.push(left);
 
-
-    for (var q = index; q < binaryImage.n; q++) {
-        left = null;
-        right = null;
-        for (var j = 0; j < binaryImage.m; j++) {
-            if (binaryImage.data[q][j] === 1) {
-                if (left === null || j < left.x) left = new Point(j, q);
-                if (right === null || j > right.x) right = new Point(j, q);
-            }
-        }
-        if (left === null && right === null) continue;
-        if (leftStack.size === 1 && rightStack.size === 1) {
-            leftStack.push(left);
-            rightStack.push(right);
+    for (var i = index; i < sparseImage.row.length - 1; i++) {
+        if (sparseImage.row[i + 1] - sparseImage.row[i] === 0) {
             continue;
         }
-        if (leftStack.size === 1) {
+        left = new Point(sparseImage.col[sparseImage.row[i]], i);
+        right = new Point(sparseImage.col[sparseImage.row[i + 1] - 1], i);
+
+        if (leftStack.size <= 1) {
             leftStack.push(left);
-        };
-        if (rightStack.size === 1) {
-            rightStack.push(right);
-        }
-        top = leftStack.top();
-        topTop = leftStack.topTop();
-        d = (left.x - top.x) * (topTop.y - top.y) - (left.y - top.y) * (topTop.x - top.x);
-        if (d > 0) {
-            while (leftStack.size >= 2) {
-                top = leftStack.top();
-                topTop = leftStack.topTop();
-                d = (left.x - top.x) * (topTop.y - top.y) - (left.y - top.y) * (topTop.x - top.x);
-                if (d > 0) {
-                    leftStack.pop();
-                } else break;
+        } else {
+            top = leftStack.top();
+            topTop = leftStack.topTop();
+            d = (left.x - top.x) * (topTop.y - top.y) - (left.y - top.y) * (topTop.x - top.x);
+
+            if (d >= 0) {
+                leftStack.pop();
+                while (leftStack.size >= 2) {
+                    top = leftStack.top();
+                    topTop = leftStack.topTop();
+                    d = (left.x - top.x) * (topTop.y - top.y) - (left.y - top.y) * (topTop.x - top.x);
+                    if (d >= 0) {
+                        leftStack.pop();
+                    } else break;
+                }
+                leftStack.push(left);
+            } else if (d < 0) {
+                leftStack.push(left);
             }
-            leftStack.push(left);
-        } else if (d < 0) {
-            leftStack.push(left);
         }
 
-
-        top = rightStack.top();
-        topTop = rightStack.topTop();
-        d = (right.x - top.x) * (topTop.y - top.y) - (right.y - top.y) * (topTop.x - top.x);
-        if (d < 0) {
-            while (rightStack.size >= 2) {
-                top = rightStack.top();
-                topTop = rightStack.topTop();
-                d = (right.x - top.x) * (topTop.y - top.y) - (right.y - top.y) * (topTop.x - top.x);
-                if (d < 0) {
-                    rightStack.pop();
-                } else break;
+        if (rightStack.size <= 1) {
+            rightStack.push(right);
+        } else {
+            top = rightStack.top();
+            topTop = rightStack.topTop();
+            d = (right.x - top.x) * (topTop.y - top.y) - (right.y - top.y) * (topTop.x - top.x);
+            if (d <= 0) {
+                rightStack.pop();
+                while (rightStack.size >= 2) {
+                    top = rightStack.top();
+                    topTop = rightStack.topTop();
+                    d = (right.x - top.x) * (topTop.y - top.y) - (right.y - top.y) * (topTop.x - top.x);
+                    if (d <= 0) {
+                        rightStack.pop();
+                    } else break;
+                }
+                rightStack.push(right);
+            } else if (d > 0) {
+                rightStack.push(right);
             }
-            rightStack.push(right);
-        } else if (d > 0) {
-            rightStack.push(right);
         }
     }
+
     var rightResult = [],
         leftResult = [];
     while (rightStack.top() !== null) {
@@ -379,22 +287,23 @@ pafcal.convexHull = function(binaryImage) {
     }
     result = leftResult.concat(rightResult.reverse())
     return result;
+};
 
-}
-pafcal.centroid = function(contour) {
+pafcal.centroid = function(convexHull) {
     var cx = 0,
         cy = 0,
         signedArea = 0,
         temp = undefined;
-    for (var i = 0; i < contour.size - 2; i++) {
-        temp = contour.data[i].x * contour.data[i + 1].y - contour.data[i + 1].x * contour.data[i].y;
-        cx += (contour.data[i].x + contour.data[i + 1].x) * temp;
-        cy += (contour.data[i].y + contour.data[i + 1].y) * temp;
+
+    for (var i = 0; i < convexHull.length - 2; i++) {
+        temp = convexHull[i].x * convexHull[i + 1].y - convexHull[i + 1].x * convexHull[i].y;
+        cx += (convexHull[i].x + convexHull[i + 1].x) * temp;
+        cy += (convexHull[i].y + convexHull[i + 1].y) * temp;
         signedArea += temp;
     }
-    temp = contour.data[i].x * contour.data[0].y - contour.data[0].x * contour.data[i].y;
-    cx += (contour.data[i].x + contour.data[0].x) * temp;
-    cy += (contour.data[i].y + contour.data[0].y) * temp;
+    temp = convexHull[i].x * convexHull[0].y - convexHull[0].x * convexHull[i].y;
+    cx += (convexHull[i].x + convexHull[0].x) * temp;
+    cy += (convexHull[i].y + convexHull[0].y) * temp;
     signedArea += temp;
 
     signedArea /= 2;
@@ -402,11 +311,24 @@ pafcal.centroid = function(contour) {
     cy = cy / (6 * signedArea);
 
     return new Point(cx, cy);
-}
+};
 
-pafcal.decide = function() {
+pafcal.decide = function(center, convexHull) {
+    var minDist = Infinity,
+        maxDist = -Infinity;
 
-}
+    for (var i = 0; i < convexHull.length; i++) {
+        var dist = _pointDist(center, convexHull[i]);
+        if (dist < minDist) minDist = dist;
+        if (dist > maxDist) maxDist = dist;
+    }
+
+    if (maxDist <= 2 * minDist) {
+        postMessage({ type: 'MOVE', data: center });
+    } else {
+        postMessage({ type: 'CLICK', data: center });
+    }
+};
 
 
 function _getBestRect(rects, scale) {
@@ -423,5 +345,63 @@ function _getBestRect(rects, scale) {
     }
 
     return new Rectangle(new Point(best.x * scale | 0, best.y * scale | 0), best.width * scale | 0, best.height * scale | 0);
+};
 
+function _pointDist(point, secondPoint) {
+    var aa = (secondPoint.x - point.x),
+        bb = (secondPoint.y - point.y);
+    return Math.sqrt(aa * aa + bb * bb);
+};
+
+function _erosion(element, sparseImage, lookupTable) {
+    var resultImage = new SparseBinaryImage(sparseImage.row.length - 1),
+        tempSize = Math.floor(element.size / 2);
+
+    for (var i = 0; i < sparseImage.size; i++) {
+        var currentPoint = sparseImage.getPointBasedOnIndex(i),
+            sum = getAreaValue(new Point(currentPoint.x - tempSize, currentPoint.y - tempSize), new Point(currentPoint.x + tempSize, currentPoint.y + tempSize), lookupTable)
+        if (sum === element.size * element.size) {
+            resultImage.add(i, j);
+        }
+    }
+    return resultImage;
+};
+
+function _dilation(width, height, element, sparseImage, lookupTable) {
+    var resultImage = new SparseBinaryImage(sparseImage.row.length - 1),
+        tempSize = Math.floor(element.size / 2);
+
+    for (var i = tempSize; i < height - tempSize - 1; i++) {
+        for (var j = tempSize; j < width - tempSize - 1; j++) {
+            var sum = getAreaValue(new Point(j - tempSize, i - tempSize), new Point(j + tempSize, i + tempSize), lookupTable);
+            if (sum > 0) {
+                resultImage.add(i, j);
+            }
+        }
+    }
+    return resultImage;
+};
+
+
+onmessage = function(e) {
+    switch (e.data.type) {
+        case 'CONFIG':
+            pafcal.configure(e.data.data);
+            break;
+        case 'IMAGE':
+            // pafcal.step(e.data.data);
+            break;
+        case 'BACKGROUND_IMAGE':
+            pafcal.modelBackground(e.data.data);
+            break;
+        case 'FINAl_BACKGROUND_IMAGE':
+            var temp = new Uint8ClampedArray(pafcal.constants.WIDTH * pafcal.constants.HEIGHT * 4);
+            for (var i = 0; i < pafcal.constants.BACKGROUND_DATA.length; i++) {
+                temp[i] = pafcal.constants.BACKGROUND_DATA[i] / pafcal.constants.BACKGROUND_FRAMES;
+            }
+            pafcal.constants.BACKGROUND_DATA = temp;
+            break;
+        default:
+            break;
+    }
 }

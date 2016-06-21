@@ -1,5 +1,5 @@
-var pafcal = {};
 navigator.getMedia = (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
+var pafcal = {};
 pafcal.canvas = document.createElement("canvas");
 
 pafcal.constants = {
@@ -13,16 +13,14 @@ pafcal.constants = {
             }
         }
     },
+    TIME: 5000,
     BACKGROUND_FRAMES: 20,
     TRACKER_SIZE: 30,
     BACKGROUND_SUBSTRACTION: true
-}
+};
 
 if (window.Worker) {
     var worker = new Worker("js/pafcal/pafcal.worker.js");
-
-
-
 
     pafcal.start = function(configuration) {
         _setUpCanvas();
@@ -30,6 +28,11 @@ if (window.Worker) {
         _setUpBackgroundFeedback();
         _setUpRecording(worker);
 
+        if (pafcal.constants.BACKGROUND_SUBSTRACTION === true) {
+            _startCountdown(worker);
+        } else {
+            _sendImage('IMAGE', worker);
+        }
     };
 
     pafcal.configure = function(object) {
@@ -38,13 +41,9 @@ if (window.Worker) {
                 pafcal.constants[property] = object[property];
             }
         }
-
         worker.postMessage({ type: 'CONFIG', data: object });
-
     };
-    pafcal.background = function() {
 
-    };
     pafcal.click = function(point) {
         var ev = document.createEvent("MouseEvent");
         ev.initMouseEvent(
@@ -67,27 +66,24 @@ if (window.Worker) {
         tracker.style.top = (point.y - pafcal.constants.TRACKER_SIZE / 2) + "px";
     };
 
-
     pafcal.miss = function(point, color) {
         var tracker = document.getElementById("PAFCAL_TRACKER");
         tracker.style.display = "initial";
         tracker.style.background = color;
         tracker.style.right = "30px";
         tracker.style.bottom = "30px";
-    }
+    };
+
     pafcal.setUpCommunications = function(e) {
         switch (e.data.type) {
             case 'IMAGE':
-                _sendImage();
-                break;
-            case 'BACKGROUND_SECOND':
-                _showCountdown(worker, e.data.data);
+                _sendImage(worker);
                 break;
             case 'MOVE':
-                pafcal.show(e.data.data, e.data.color);
+                pafcal.showTracker(e.data.data, e.data.color);
                 break;
             case 'CLICK':
-                pafcal.show(e.data.data, e.data.color);
+                pafcal.showTracker(e.data.data, e.data.color);
                 pafcal.click(e.data.data)
                 break;
             case 'MISS':
@@ -105,7 +101,19 @@ if (window.Worker) {
 function _setUpCanvas() {
     pafcal.canvas.width = pafcal.constants.WIDTH;
     pafcal.canvas.height = pafcal.constants.HEIGHT;
-}
+};
+
+function _setUpTracker() {
+    var tracker = document.createElement("div");
+    tracker.id = "TRACKER";
+    tracker.style.display = "none";
+    tracker.style.position = "fixed";
+    tracker.style.borderRadius = "50%";
+    tracker.style.width = pafcal.constants.TRACKER_SIZE + "px";
+    tracker.style.height = pafcal.constants.TRACKER_SIZE + "px";
+
+    document.body.appendChild(tracker);
+};
 
 function _setUpBackgroundFeedback() {
     var background = document.createElement("div"),
@@ -126,19 +134,7 @@ function _setUpBackgroundFeedback() {
 
     background.appendChild(text);
     document.body.appendChild(background);
-}
-
-function _setUpTracker() {
-    var tracker = document.createElement("div");
-    tracker.id = "TRACKER";
-    tracker.style.display = "none";
-    tracker.style.position = "fixed";
-    tracker.style.borderRadius = "50%";
-    tracker.style.width = pafcal.constants.TRACKER_SIZE + "px";
-    tracker.style.height = pafcal.constants.TRACKER_SIZE + "px";
-
-    document.body.appendChild(tracker);
-}
+};
 
 function _setUpRecording(worker) {
     pafcal.video = document.createElement('video');
@@ -159,46 +155,55 @@ function _setUpRecording(worker) {
     );
     pafcal.video.onplay = function(ev) {
         worker.onmessage = pafcal.setUpCommunications;
-        worker.postMessage({ type: 'START', data: null });
-
     };
-}
+};
 
-function _showCountdown(worker, data) {
-    var background = document.getElementById("BACKGROUND_FEEDBACK_RECT"),
-        text = document.getElementById("BACKGROUND_FEEDBACK_TEXT"),
-        iterations = 0,
+function _startCountdown(worker) {
+    var seconds = 5,
         interval = null;
 
-    if (data > 0) {
-        text.innerHTML = data;
+    interval = window.setInterval(function() {
+        _showCountdown(worker, seconds);
+        if (seconds === 0) clearInterval(interval);
+        seconds--;
+    }, 1000)
+};
+
+function _showCountdown(worker, seconds) {
+    var background = document.getElementById("BACKGROUND_FEEDBACK_RECT"),
+        text = document.getElementById("BACKGROUND_FEEDBACK_TEXT"),
+        interval = null,
+        iterations = 0;
+
+    if (seconds > 0) {
+        text.innerHTML = seconds;
         background.style.display = "initial";
     } else {
         text.innerHTML = "Recording...";
         interval = window.setInterval(function() {
-            if (++iterations === pafcal.constants.BACKGROUND_FRAMES) {
+            iterations++;
+            if (iterations === pafcal.constants.BACKGROUND_FRAMES) {
                 clearInterval(interval);
-                worker.postMessage({ type: "BACKGROUND_FINISH", data: null });
+                _sendImage('FINAl_BACKGROUND_IMAGE', worker);
                 _deleteBackground();
+            } else {
+                _sendImage('BACKGROUND_IMAGE', worker);
             }
-            _sendImage(worker, "BACKGROUND_IMAGE");
-        }, 250);
+        }, pafcal.constants.TIME / pafcal.constants.BACKGROUND_FRAMES);
     }
-
-}
+};
 
 function _deleteBackground() {
     var background = document.getElementById("BACKGROUND_FEEDBACK_RECT"),
         text = document.getElementById("BACKGROUND_FEEDBACK_TEXT");
 
     document.body.removeChild(background);
-}
+};
 
-function _sendImage(worker, type) {
+function _sendImage(type, worker) {
     var imageData = null;
     pafcal.canvas.getContext("2d").drawImage(pafcal.video, 0, 0, pafcal.constants.WIDTH, pafcal.constants.HEIGHT);
     imageData = pafcal.canvas.getContext("2d").getImageData(0, 0, pafcal.constants.WIDTH, pafcal.constants.HEIGHT);
 
     worker.postMessage({ type: type, data: imageData });
-}
-
+};

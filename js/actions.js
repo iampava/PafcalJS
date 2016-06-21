@@ -66,10 +66,6 @@ function hsvSkinDetection(pixel) {
     return 0;
 }
 
-function cybSkinDetection(pixel) {
-    return 1;
-}
-
 function extractSkin(width, height, image) {
     var binaryImage = new BinaryImage(width, height),
         length = image.data.length;
