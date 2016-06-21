@@ -214,32 +214,6 @@ function sequantialDeleteConectedComponents(width, height, sparseImage, sizeThre
     return { binary: binaryImage };
 }
 
-function contrastStreching(width, height, imageData, context) {
-    var newImageData = context.createImageData(width, height),
-        min = Infinity,
-        max = -Infinity;
-    for (var i = 0; i < imageData.data.length; i += 4) {
-        var hsvPixel = rgbToHsv(new RGBPixel(imageData.data[i], imageData.data[i + 1], imageData.data[i + 2]));
-        if (hsvPixel.v < min) min = hsvPixel.v;
-        if (hsvPixel.v > max) max = hsvPixel.v;
-    }
-
-    for (var i = 0; i < imageData.data.length; i += 4) {
-        var hsvPixel = rgbToHsv(new RGBPixel(imageData.data[i], imageData.data[i + 1], imageData.data[i + 2]));
-        hsvPixel.v = reMap(hsvPixel.v, min, max) * 100;
-        if (hsvPixel.v < 2) {
-            console.log("wut?")
-        }
-        var rgbPixel = hsvToRgb(hsvPixel);
-
-        newImageData.data[i] = rgbPixel.red;
-        newImageData.data[i + 1] = rgbPixel.green;
-        newImageData.data[i + 2] = rgbPixel.blue;
-        newImageData.data[i + 3] = 255;
-    }
-    return newImageData;
-}
-
 function convexHull(binaryImage) {
     var leftStack = new Stack(),
         rightStack = new Stack(),
