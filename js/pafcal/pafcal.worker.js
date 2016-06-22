@@ -6,7 +6,7 @@ var pafcal = {};
 pafcal.constants = {
     WIDTH: 640,
     HEIGHT: 480,
-    BACKGROUND_THRESHOLD: 10,
+    BACKGROUND_THRESHOLD: 15,
     HD_CONSTRAINTS: {
         video: {
             mandatory: {
@@ -15,7 +15,7 @@ pafcal.constants = {
             }
         }
     },
-    BACKGROUND_FRAMES: 20,
+    BACKGROUND_FRAMES: 15,
     SIZE_THRESHOLD: 500,
     TRACKER_SIZE: 20,
     HSV_THRESHOLD: {
@@ -39,7 +39,8 @@ pafcal.constants = {
     CLICK_COLOR: '#0080FF',
     MISS_COLOR: '#FF8000',
     BACKGROUND_COLOR: '#C0C0C0',
-    BACKGROUND_SUBSTRACTION: true,
+    BACKGROUND_SUBSTRACTION_SETTING: true,
+    BACKGROUND_SUBSTRACTION_DECISION: null,
     BACKGROUND_DATA: [],
 
     JS_FEAT: {
@@ -54,8 +55,9 @@ pafcal.constants = {
         MAX_WORK_SIZE: 160
     },
 };
+var _diffPixels = 0;
 
-pafcal.configure = function() {
+pafcal.configure = function(object) {
     for (var property in object) {
         if (object.hasOwnProperty(property) && pafcal.constants.hasOwnProperty(property)) {
             pafcal.constants[property] = object[property];
@@ -63,9 +65,22 @@ pafcal.configure = function() {
     }
 };
 
-pafcal.modelBackground = function(imageData) {
+pafcal.modelBackground = function(imageData, count) {
+    var backgroundData = pafcal.constants.BACKGROUND_DATA;
+    if (pafcal.constants.BACKGROUND_SUBSTRACTION_DECISION == false) return;
+
     for (var i = 0; i < imageData.data.length; i++) {
+        if (backgroundData[i] === undefined) {
+            backgroundData[i] = 0;
+        }
+
         pafcal.constants.BACKGROUND_DATA[i] += imageData.data[i];
+        var avg = backgroundData[i] / count;
+        if (Math.abs(avg - imageData.data[i]) > pafcal.constants.BACKGROUND_THRESHOLD * 2) _diffPixels++;
+    }
+
+    if (_diffPixels >= pafcal.constants.WIDTH * pafcal.constants.HEIGHT * 3 * (pafcal.constants.BACKGROUND_FRAMES / 6)) {
+        pafcal.constants.BACKGROUND_SUBSTRACTION_DECISION = false;
     }
 };
 
@@ -79,22 +94,41 @@ pafcal.step = function(image, haarData) {
         h = (pafcal.constants.HEIGHT * scale) | 0;
 
     faceResult = pafcal.faceDetection(w, h, haarData, pafcal.constants.JS_FEAT.CLASSIFIER, pafcal.constants.JS_FEAT.OPTONS);
-    postMessage({ type: 'IMAGE', data: null });
-    return;
-
     filterResult = pafcal.filter(pafcal.constants.WIDTH, pafcal.constants.HEIGHT, image, faceResult);
     morphoResult = pafcal.morpho(pafcal.constants.WIDTH, pafcal.constants.HEIGHT, filterResult.sparse, filterResult.table);
-    deleteResult = pafcal.delete(morphoResult, pafcal.constants.SIZE_THRESHOLD);
 
-    if (deleteResult === null) {
-        postMessage({ type: 'MISS', data: null });
+    /*var dummySparse = new SparseBinaryImage(3);
+    dummySparse.add(0,0);
+    dummySparse.add(0,1);
+    dummySparse.add(0,3);
+    dummySparse.add(0,4);
+    dummySparse.add(1,0);
+    dummySparse.add(1,3);
+    dummySparse.add(1,4);
+    dummySparse.add(2,0);
+    dummySparse.add(2,1);
+    dummySparse.add(2,2);
+    dummySparse.add(2,3);*/
+
+    deleteResult = pafcal.delete(morphoResult, 100); // pafcal.constants.SIZE_THRESHOLD);
+
+    if (deleteResult.size === 0) {
+        postMessage({ type: 'MISS', data: pafcal.constants.MISS_COLOR });
+        // postMessage({ type: 'COLOR_TEST', data: { row: deleteResult.row, col: deleteResult.col, size: deleteResult.size, rowCount: deleteResult.rowCount } });
     } else {
         var convexHull = pafcal.convexHull(deleteResult);
+        // postMessage({ type: 'CONVEX_HULL', data: { points: convexHull, image: { row: deleteResult.row, col: deleteResult.col, size: deleteResult.size, rowCount: deleteResult.rowCount } } });
+        // self.setTimeout(function() {
+        //     postMessage({ type: 'IMAGE', data: null });
+        // }, 100);
+        // return;
         var centroid = pafcal.centroid(convexHull);
-
-        pafcal.decide(centroid, convexHull);
+        pafcal.decide(centroid, convexHull, deleteResult);
     }
-    postMessage({ type: 'IMAGE', data: null })
+    // self.setTimeout(function() {
+    //     postMessage({ type: 'IMAGE', data: null });
+    // }, 100);
+    postMessage({ type: 'IMAGE', data: null });
 };
 
 pafcal.faceDetection = function(w, h, image, classifier, options) {
@@ -130,42 +164,49 @@ pafcal.faceDetection = function(w, h, image, classifier, options) {
 pafcal.filter = function(width, height, image, faceRect) {
     var sparseImage = new SparseBinaryImage(height),
         binaryLookupTable = new BinaryLookupTable(width, height),
-        background = pafcal.constants.BACKGROUND_DATA.data;
+        background = pafcal.constants.BACKGROUND_DATA,
+        logic = null,
+        length = image.data.length;
 
-    length = image.data.length;
     for (var i = 0; i < length; i += 4) {
-        var backgroundPixel = new RGBPixel(background.data[i], background.data[i + 1], background.data[i + 2]),
+        var backgroundPixel = new RGBPixel(background[i], background[i + 1], background[i + 2]),
             imagePixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]),
             rowIndex = Math.floor((i / 4) / width),
             colIndex = Math.floor((i / 4) % width);
-        if (!faceRect) {
-            logic = _backgroundThreshold(THRESHOLD, backgroundPixel, imagePixel) && _rgbSkinDetection(imagePixel) && _hsvSkinDetection(rgbToHsv(imagePixel));
-        } else {
+
+        logic = _rgbSkinDetection(imagePixel) && _hsvSkinDetection(rgbToHsv(imagePixel), pafcal.constants.HSV_THRESHOLD);
+        if (faceRect) {
             faceRect.y -= height / 2;
             faceRect.height *= 2;
-            logic = !faceRect.contains(new Point(colIndex, rowIndex)) && _backgroundThreshold(THRESHOLD, backgroundPixel, imagePixel) && _rgbSkinDetection(imagePixel) && _hsvSkinDetection(rgbToHsv(imagePixel));
+            logic = logic && !faceRect.contains(new Point(colIndex, rowIndex));
         }
+        logic = logic && ((pafcal.constants.BACKGROUND_SUBSTRACTION_DECISION) ? _backgroundThreshold(pafcal.constants.BACKGROUND_THRESHOLD, backgroundPixel, imagePixel) : true);
 
         if (logic) {
             sparseImage.add(rowIndex, colIndex);
-            binaryLookupTable.data[rowIndex].push(computeBinaryLookupValue(rowIndex, 1, logic, binaryLookupTable));
-        } else {
-            binaryLookupTable.data[rowIndex].push(computeBinaryLookupValue(rowIndex, 0, logic, binaryLookupTable));
         }
+        binaryLookupTable.data[rowIndex].push(_computeBinaryLookupValue(rowIndex, colIndex, logic, binaryLookupTable));
     }
+    // postMessage({ type: 'COLOR_TEST', data: { row: sparseImage.row, col: sparseImage.col, size: sparseImage.size, rowCount: sparseImage.rowCount } });
     return { sparse: sparseImage, table: binaryLookupTable };
 };
 
 pafcal.morpho = function(width, height, sparseImage, lookupTable) {
-    var morphoElement = new FullMorphoElement(21);
-    return _erosion(morphoElement, _dilation(width, height, morphoElement, sparseImage, lookupTable), lookupTable);
+    var morphoElement = new FullMorphoElement(9),
+        newLookupTable = new BinaryLookupTable(lookupTable.width, lookupTable.height),
+        dilationResult = null;
+
+    dilationResult = _dilation(width, height, morphoElement, sparseImage, lookupTable);
+    newLookupTable.initFromSparse(dilationResult);
+    return _erosion(morphoElement, dilationResult, newLookupTable);
+
 };
 
 pafcal.delete = function(sparseImage, sizeThreshold) {
     var indexLabel = [],
         labels = [],
         labelMap = [],
-        resultImage = new SparseBinaryImage(sparseImage.row.length - 1),
+        resultImage = new SparseBinaryImage(sparseImage.rowCount),
         l = 1;
 
     for (var i = 0; i < sparseImage.size; i++) {
@@ -196,8 +237,8 @@ pafcal.delete = function(sparseImage, sizeThreshold) {
         if (top !== left) {
             labels[top]++;
             indexLabel[i] = top;
-            labelMap[top].push(left);
-            labelMap[left].push(top);
+            if (labelMap[top].indexOf(left) === -1) labelMap[top].push(left);
+            if (labelMap[left].indexOf(top) === -1) labelMap[left].push(top);
             continue;
         }
     }
@@ -301,7 +342,7 @@ pafcal.centroid = function(convexHull) {
         cy = 0,
         signedArea = 0,
         temp = undefined;
-
+    if (convexHull.length === 0) return null;
     for (var i = 0; i < convexHull.length - 2; i++) {
         temp = convexHull[i].x * convexHull[i + 1].y - convexHull[i + 1].x * convexHull[i].y;
         cx += (convexHull[i].x + convexHull[i + 1].x) * temp;
@@ -320,7 +361,7 @@ pafcal.centroid = function(convexHull) {
     return new Point(cx, cy);
 };
 
-pafcal.decide = function(center, convexHull) {
+pafcal.decide = function(center, convexHull, deleteResult) {
     var minDist = Infinity,
         maxDist = -Infinity;
 
@@ -331,9 +372,9 @@ pafcal.decide = function(center, convexHull) {
     }
 
     if (maxDist <= 2 * minDist) {
-        postMessage({ type: 'MOVE', data: center });
+        postMessage({ type: 'MOVE', data: { point: center, color: pafcal.constants.MOVE_COLOR, convexHull: convexHull, image: { row: deleteResult.row, col: deleteResult.col, size: deleteResult.size, rowCount: deleteResult.rowCount } } });
     } else {
-        postMessage({ type: 'CLICK', data: center });
+        postMessage({ type: 'CLICK', data: { point: center, color: pafcal.constants.CLICK_COLOR, convexHull: convexHull, image: { row: deleteResult.row, col: deleteResult.col, size: deleteResult.size, rowCount: deleteResult.rowCount } } });
     }
 };
 
@@ -351,9 +392,9 @@ function _getBestRect(rects, scale) {
         }
     }
 
-    var rect = new Rectangle(new Point(best.x * scale | 0, best.y * scale | 0), best.width * scale | 0, best.height * scale | 0);
+    // var rect = new Rectangle(new Point(best.x * scale | 0, best.y * scale | 0), best.width * scale | 0, best.height * scale | 0);
 
-    postMessage({ type: 'FACE', data: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
+    // postMessage({ type: 'FACE', data: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
 
     return new Rectangle(new Point(best.x * scale | 0, best.y * scale | 0), best.width * scale | 0, best.height * scale | 0);
 };
@@ -365,26 +406,28 @@ function _pointDist(point, secondPoint) {
 };
 
 function _erosion(element, sparseImage, lookupTable) {
-    var resultImage = new SparseBinaryImage(sparseImage.row.length - 1),
+    var resultImage = new SparseBinaryImage(sparseImage.rowCount),
         tempSize = Math.floor(element.size / 2);
 
     for (var i = 0; i < sparseImage.size; i++) {
         var currentPoint = sparseImage.getPointBasedOnIndex(i),
-            sum = getAreaValue(new Point(currentPoint.x - tempSize, currentPoint.y - tempSize), new Point(currentPoint.x + tempSize, currentPoint.y + tempSize), lookupTable)
+            sum = _getAreaValue(new Point(currentPoint.x - tempSize, currentPoint.y - tempSize), new Point(currentPoint.x + tempSize, currentPoint.y + tempSize), lookupTable)
         if (sum === element.size * element.size) {
-            resultImage.add(i, j);
+            resultImage.add(currentPoint.y, currentPoint.x);
         }
     }
     return resultImage;
 };
 
 function _dilation(width, height, element, sparseImage, lookupTable) {
-    var resultImage = new SparseBinaryImage(sparseImage.row.length - 1),
+    var resultImage = new SparseBinaryImage(sparseImage.rowCount),
+        binaryLookupTable = new BinaryLookupTable(width, height),
         tempSize = Math.floor(element.size / 2);
+
 
     for (var i = tempSize; i < height - tempSize - 1; i++) {
         for (var j = tempSize; j < width - tempSize - 1; j++) {
-            var sum = getAreaValue(new Point(j - tempSize, i - tempSize), new Point(j + tempSize, i + tempSize), lookupTable);
+            var sum = _getAreaValue(new Point(j - tempSize, i - tempSize), new Point(j + tempSize, i + tempSize), lookupTable);
             if (sum > 0) {
                 resultImage.add(i, j);
             }
@@ -393,6 +436,121 @@ function _dilation(width, height, element, sparseImage, lookupTable) {
     return resultImage;
 };
 
+function _backgroundThreshold(threshold, backgroundPixel, imagePixel) {
+
+    if (Math.abs(backgroundPixel.red - imagePixel.red) > threshold && Math.abs(backgroundPixel.blue - imagePixel.blue) > threshold && Math.abs(backgroundPixel.green - imagePixel.green) > threshold) {
+        return true
+    };
+    // if (Math.abs(backgroundPixel.blue - imagePixel.blue) < threshold) return false;
+    // if (Math.abs(backgroundPixel.green - imagePixel.green) < threshold) return false;
+    return false;
+};
+
+function _medianBackFilter(row, col, background, image, threshold) {
+    var size = 1,
+        width = pafcal.constants.WIDTH,
+        height = pafcal.constants.HEIGHT,
+        r = [],
+        g = [],
+        b = [],
+        br = [],
+        bg = [],
+        bb = [];
+
+    for (var i = row - size; i <= row + size; i++) {
+        for (var j = col - size; j <= col + size; j++) {
+            var temp = i * width * 4 + j * 4;
+            if (background[temp] !== undefined) {
+                br.push(background[temp]);
+                bg.push(background[temp + 1]);
+                bb.push(background[temp + 2]);
+            }
+            if (image.data[temp] !== undefined) {
+                r.push(image.data[temp]);
+                g.push(image.data[temp + 1]);
+                b.push(image.data[temp + 2]);
+            }
+        }
+    }
+
+    r.sort();
+    g.sort();
+    b.sort();
+
+    br.sort();
+    bg.sort();
+    bb.sort();
+
+    var fore = new RGBPixel(r[Math.floor(r.length / 2)], g[Math.floor(g.length / 2)], b[Math.floor(b.length / 2)]);
+    var back = new RGBPixel(br[Math.floor(r.length / 2)], bg[Math.floor(bg.length / 2)], bb[Math.floor(bb.length / 2)]);
+
+    if (Math.abs(fore.red - back.red) > threshold && Math.abs(fore.blue - back.blue) > threshold && Math.abs(fore.green - back.green) > threshold) {
+        return true
+    };
+    return false;
+}
+
+
+function _rgbSkinDetection(pixel) {
+    var isSkin = false;
+
+    if ((pixel.red > 95) && (pixel.green > 40) && (pixel.blue > 20) && (_rgbMax(pixel) - _rgbMin(pixel) > 15) &&
+        (Math.abs(pixel.red - pixel.green) > 15) && (pixel.red > pixel.green) && (pixel.red > pixel.blue)) {
+        isSkin = true;
+    }
+
+    if ((pixel.red > 220) && (pixel.green > 210) && (pixel.blue > 170) && (Math.abs(pixel.red - pixel.green) <= 15) &&
+        (pixel.red > pixel.blue) && (pixel.green > pixel.blue)) {
+        isSkin = true;
+    }
+    return isSkin;
+};
+
+function _isValueInRange(value, range) {
+    for (var i = 0; i < range.length; i++) {
+        if (value >= range[i].MIN && value <= range[i].MAX) {
+            return true;
+        }
+    }
+    return false;
+};
+
+function _hsvSkinDetection(pixel, threshold) {
+    if (_isValueInRange(pixel.h, threshold.HUE) && _isValueInRange(pixel.s, threshold.SATURATION) && _isValueInRange(pixel.v, threshold.VALUE)) {
+        return true;
+    }
+    return false;
+};
+
+
+
+function _computeBinaryLookupValue(n, m, value, table) {
+    var result = 0;
+
+    result += table.get(n - 1, m);
+    result += table.get(n, m - 1);
+    result -= table.get(n - 1, m - 1);
+    result += (value) ? 1 : 0;
+
+    return result;
+};
+
+function _rgbMax(pixel) {
+    return Math.max(pixel.red, pixel.green, pixel.blue);
+};
+
+function _rgbMin(pixel) {
+    return Math.min(pixel.red, pixel.green, pixel.blue);
+};
+
+function _getAreaValue(point1, point2, table) {
+    if (point1.x > point2.x || point1.y > point2.y) {
+        throw new Error("The points are not in the right order!")
+    };
+
+    result = table.get(point2.y, point2.x) + table.get(point1.y - 1, point1.x - 1) - table.get(point1.y - 1, point2.x) - table.get(point2.y, point1.x - 1);
+    return result;
+};
 
 onmessage = function(e) {
     switch (e.data.type) {
@@ -403,14 +561,22 @@ onmessage = function(e) {
             pafcal.step(e.data.data.image, e.data.data.jsfeat);
             break;
         case 'BACKGROUND_IMAGE':
-            pafcal.modelBackground(e.data.data);
+            pafcal.modelBackground(e.data.data.image, e.data.data.count);
             break;
         case 'FINAL_BACKGROUND_IMAGE':
             var temp = new Uint8ClampedArray(pafcal.constants.WIDTH * pafcal.constants.HEIGHT * 4);
+            pafcal.modelBackground(e.data.data.image, e.data.data.count);
             for (var i = 0; i < pafcal.constants.BACKGROUND_DATA.length; i++) {
                 temp[i] = pafcal.constants.BACKGROUND_DATA[i] / pafcal.constants.BACKGROUND_FRAMES;
             }
             pafcal.constants.BACKGROUND_DATA = temp;
+            if (pafcal.constants.BACKGROUND_SUBSTRACTION_DECISION === null) {
+                pafcal.constants.BACKGROUND_SUBSTRACTION_DECISION = true;
+                console.log("YES!");
+            } else {
+                console.log(pafcal.constants.BACKGROUND_SUBSTRACTION_DECISION);
+                console.log("NO!");
+            }
             postMessage({ type: 'IMAGE', data: null });
             break;
         default:

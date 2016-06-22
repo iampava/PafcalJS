@@ -105,23 +105,3 @@ function rgbToHsv(pixel) {
         return new HSVPixel(h, s * 100, v * 100);
     }
 }
-
-function rgbTocyb(pixel) {
-    var y = 16,
-        // y = 0,
-        cb = 128,
-        cr = 128;
-
-    y += CYB_CONVERSION_MATRIX[0][0] * pixel.red + CYB_CONVERSION_MATRIX[0][1] * pixel.green + CYB_CONVERSION_MATRIX[0][2] * pixel.blue;
-    cb += CYB_CONVERSION_MATRIX[1][0] * pixel.red + CYB_CONVERSION_MATRIX[1][1] * pixel.green + CYB_CONVERSION_MATRIX[1][2] * pixel.blue;
-    cr += CYB_CONVERSION_MATRIX[2][0] * pixel.red + CYB_CONVERSION_MATRIX[2][1] * pixel.green + CYB_CONVERSION_MATRIX[2][2] * pixel.blue;
-
-    return new cybPixel(y, cb, cr);
-}
-
-function rgbToRb(pixel) {
-    var sum = pixel.red + pixel.blue + pixel.green,
-        r = pixel.red / sum,
-        b = pixel.blue / sum;
-    return new RBPixel(r, b);
-}
