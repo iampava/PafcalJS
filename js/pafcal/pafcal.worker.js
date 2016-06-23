@@ -110,24 +110,16 @@ pafcal.step = function(image, haarData) {
     dummySparse.add(2,2);
     dummySparse.add(2,3);*/
 
-    deleteResult = pafcal.delete(morphoResult, 100); // pafcal.constants.SIZE_THRESHOLD);
+    deleteResult = pafcal.delete(morphoResult, 200); // pafcal.constants.SIZE_THRESHOLD);
 
     if (deleteResult.size === 0) {
         postMessage({ type: 'MISS', data: pafcal.constants.MISS_COLOR });
         // postMessage({ type: 'COLOR_TEST', data: { row: deleteResult.row, col: deleteResult.col, size: deleteResult.size, rowCount: deleteResult.rowCount } });
     } else {
         var convexHull = pafcal.convexHull(deleteResult);
-        // postMessage({ type: 'CONVEX_HULL', data: { points: convexHull, image: { row: deleteResult.row, col: deleteResult.col, size: deleteResult.size, rowCount: deleteResult.rowCount } } });
-        // self.setTimeout(function() {
-        //     postMessage({ type: 'IMAGE', data: null });
-        // }, 100);
-        // return;
         var centroid = pafcal.centroid(convexHull);
         pafcal.decide(centroid, convexHull, deleteResult);
     }
-    // self.setTimeout(function() {
-    //     postMessage({ type: 'IMAGE', data: null });
-    // }, 100);
     postMessage({ type: 'IMAGE', data: null });
 };
 
@@ -161,11 +153,11 @@ pafcal.faceDetection = function(w, h, image, classifier, options) {
     return _getBestRect(rects, pafcal.constants.WIDTH / img_u8.cols);
 };
 
+
 pafcal.filter = function(width, height, image, faceRect) {
     var sparseImage = new SparseBinaryImage(height),
         binaryLookupTable = new BinaryLookupTable(width, height),
         background = pafcal.constants.BACKGROUND_DATA,
-        logic = null,
         length = image.data.length;
 
     for (var i = 0; i < length; i += 4) {
@@ -173,7 +165,6 @@ pafcal.filter = function(width, height, image, faceRect) {
             imagePixel = new RGBPixel(image.data[i], image.data[i + 1], image.data[i + 2]),
             rowIndex = Math.floor((i / 4) / width),
             colIndex = Math.floor((i / 4) % width);
-
         logic = _rgbSkinDetection(imagePixel) && _hsvSkinDetection(rgbToHsv(imagePixel), pafcal.constants.HSV_THRESHOLD);
         if (faceRect) {
             faceRect.y -= height / 2;
@@ -192,11 +183,12 @@ pafcal.filter = function(width, height, image, faceRect) {
 };
 
 pafcal.morpho = function(width, height, sparseImage, lookupTable) {
-    var morphoElement = new FullMorphoElement(9),
+    var morphoElement = new FullMorphoElement(11),
         newLookupTable = new BinaryLookupTable(lookupTable.width, lookupTable.height),
         dilationResult = null;
 
     dilationResult = _dilation(width, height, morphoElement, sparseImage, lookupTable);
+    return dilationResult;
     newLookupTable.initFromSparse(dilationResult);
     return _erosion(morphoElement, dilationResult, newLookupTable);
 

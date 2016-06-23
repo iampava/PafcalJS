@@ -7,8 +7,9 @@
 </head>
 
 <body onload='clientStart()'>
-    <canvas id="resultCanvas" width="640" height="480"></canvas>
-    <canvas id="videoCanvas" width="640" height="480"></canvas>
+    <!-- <canvas id="resultCanvas" width="640" height="480"></canvas> -->
+    <canvas id="videoCanvas" width="640" height="480" style="position: fixed; top: 0; right:0;"></canvas>
+    <!-- <canvas id="thirdCanvas" width="640" height="480"></canvas> -->
     <div class="calculator">
         <div class="result">
             <p id="result">
@@ -34,9 +35,9 @@
                 <button type="button" onclick="addNumber(0)">0</button>
             </div>
             <div class="row">
-                <button type="button" onclick="addNumber(+)"> + </button>
-                <button type="button" onclick="addNumber(-)"> -</button>
-                <button type="button" onclick="addNumber(=)"> =</button>
+                <button type="button" onclick="addNumber('+')"> + </button>
+                <button type="button" onclick="addNumber('-')"> -</button>
+                <button type="button" onclick="addNumber('=')"> =</button>
             </div>
         </div>
     </div>
