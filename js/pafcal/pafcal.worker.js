@@ -16,7 +16,7 @@ pafcal.constants = {
         }
     },
     BACKGROUND_FRAMES: 15,
-    SIZE_THRESHOLD: 500,
+    SIZE_THRESHOLD: 200,
     TRACKER_SIZE: 20,
     HSV_THRESHOLD: {
         HUE: [{
