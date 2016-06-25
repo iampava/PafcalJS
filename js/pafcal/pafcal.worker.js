@@ -47,7 +47,8 @@ pafcal.constants = {
     },
 };
 var _diffPixels = 0,
-    _clicked = false;
+    _center = null,
+    _state = 'MISS';
 
 pafcal.configure = function(object) {
     for (var property in object) {
@@ -75,52 +76,55 @@ pafcal.modelBackground = function(imageData, count) {
         pafcal.constants.BACKGROUND_SUBSTRACTION_DECISION = false;
     }
 };
-
-pafcal.step = function(image, haarData, optimized) {
+pafcal.step = function(image, haarData) {
     var faceResult = null,
         filterResult = null,
         morphoResult = null,
         deleteResult = null,
         scale = Math.min(pafcal.constants.JS_FEAT.MAX_WORK_SIZE / pafcal.constants.WIDTH, pafcal.constants.JS_FEAT.MAX_WORK_SIZE / pafcal.constants.HEIGHT),
-        w = (pafcal.constants.WIDTH * scale) | 0,
-        h = (pafcal.constants.HEIGHT * scale) | 0,
-        optimizedData = null;
+        haarWidth = (pafcal.constants.WIDTH * scale) | 0,
+        haarHeight = (pafcal.constants.HEIGHT * scale) | 0,
+        width = pafcal.constants.WIDTH,
+        height = pafcal.constants.HEIGHT,
+        optimizedData = null,
+        topLeft = new Point(0, 0);
 
     if (_center) {
-        var topLeft = new Point(_center.x - (pafcal.ADAPTIVE_SIZE.WIDTH * 1.5), _center.y - (pafcal.ADAPTIVE_SIZE.HEIGHT * 1.5)),
-            botRight = new Point(topLeft.x + 3 * pafcal.ADAPTIVE_SIZE.WIDTH, topLeft.y + 3 * pafcal.ADAPTIVE_SIZE.HEIGHT);
+        var botRight = new Point(Math.min(_center.x + (pafcal.ADAPTIVE_SIZE.WIDTH * 1.5), 0), Math.min(_center.y + (pafcal.ADAPTIVE_SIZE.HEIGHT * 1.5), 0));
+        topLeft = new Point(Math.max(_center.x - (pafcal.ADAPTIVE_SIZE.WIDTH * 1.5), 0), Math.max(_center.y - (pafcal.ADAPTIVE_SIZE.HEIGHT * 1.5), 0));
+        width = botRight.x - topLeft.x + 1;
+        height = botRight.y - topLeft.y + 1;
+        optimizedData = new ImageData(width, height);
 
-        topLeft.x = Math.max(topLeft.x, 0);
-        topLeft.y = Math.max(topLeft.y, 0);
-        botRight.x = Math.min(pafcal.WIDTH, botRight.x);
-        botRight.y = Math.min(pafcal.HEIGHT, botRight.y);
-
-        optimizedData = new ImageData(botRight.x - topLeft.x + 1, botRight.y - topLeft.y + 1);
         for (var i = topLeft.y; i <= botRight.y; i++4) {
             for (var j = topLeft.x; j <= botRight.x; j++) {
                 optimizedData.data.push(imageData.data[(i * pafcal.WIDTH + j) * 4]);
             }
         }
     } else {
-        optimizedData = imageData;
+        optimizedData = image;
     }
 
 
-    faceResult = pafcal.faceDetection(w, h, haarData, pafcal.constants.JS_FEAT.CLASSIFIER, pafcal.constants.JS_FEAT.OPTONS);
-    filterResult = pafcal.filter(pafcal.constants.WIDTH, pafcal.constants.HEIGHT, image, faceResult);
-    morphoResult = pafcal.morpho(pafcal.constants.WIDTH, pafcal.constants.HEIGHT, filterResult.sparse, filterResult.table);
+    faceResult = pafcal.faceDetection(haarWidth, haarHeight, haarData, pafcal.constants.JS_FEAT.CLASSIFIER, pafcal.constants.JS_FEAT.OPTONS);
+    filterResult = pafcal.filter(width, height, topLeft, optimizedData, faceResult);
+    morphoResult = pafcal.morpho(width, height, filterResult.sparse, filterResult.table);
 
     deleteResult = pafcal.delete(morphoResult, pafcal.constants.SIZE_THRESHOLD);
 
-
     if (deleteResult.size === 0) {
-        (optimized) ? pafcal.step(imageData, haarData, true): postMessage({ type: 'MISS', data: null });
-        _center = null;
+        if (_center) {
+            _center = null;
+            pafcal.step(imageData, haarData)
+        } else {
+            _state = 'MISS';
+            postMessage({ type: 'MISS', data: null });
+        }
+        return;
     } else {
         var convexHull = pafcal.convexHull(deleteResult),
-            centroid = pafcal.centroid(convexHull),
-            _center = centroid;
-        pafcal.decide(centroid, convexHull, deleteResult);
+            _center = pafcal.centroid(convexHull);
+        pafcal.decide(_center, convexHull, deleteResult);
     }
     postMessage({ type: 'IMAGE', data: null });
 };
@@ -150,7 +154,7 @@ pafcal.faceDetection = function(w, h, image, classifier, options) {
 };
 
 
-pafcal.filter = function(width, height, image, faceRect) {
+pafcal.filter = function(width, height, image, offset, faceRect) {
     var sparseImage = new SparseBinaryImage(height),
         binaryLookupTable = new BinaryLookupTable(width, height),
         background = pafcal.constants.BACKGROUND_DATA,
@@ -356,12 +360,13 @@ pafcal.decide = function(center, convexHull, deleteResult) {
     }
 
     if (maxDist <= 2 * minDist) {
+        _state = 'MOVE';
         postMessage({ type: 'MOVE', data: null })
     } else {
-        if (_clicked === false) {
-            postMessage({ type: 'CLICK', data: null });
+        if (_state !== 'CLICK') {
+            postMessage({ type: 'CLICK', data: new Point(center.x + offset.x, center.y + offset.y) });
         } else {
-            postMessage({ type: 'SECOND_CLICK', data: null });
+            postMessage({ type: 'SECOND_CLICK', data: new Point(center.x + offset.x, center.y + offset.y) });
         }
     };
 }
@@ -545,7 +550,7 @@ onmessage = function(e) {
             pafcal.configure(e.data.data);
             break;
         case 'IMAGE':
-            pafcal.step(e.data.data.image, e.data.data.jsfeat, false);
+            pafcal.step(e.data.data.image, e.data.data.jsfeat);
             break;
         case 'BACKGROUND_IMAGE':
             pafcal.modelBackground(e.data.data.image, e.data.data.count);

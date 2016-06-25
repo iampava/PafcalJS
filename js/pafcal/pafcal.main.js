@@ -4,8 +4,18 @@ pafcal.canvas = document.createElement("canvas");
 pafcal.tempCanvas = document.createElement("canvas");
 
 pafcal.constants = {
+    WORKER_PATH: null,
     WIDTH: 640,
     HEIGHT: 480,
+    MOVE_COLOR: '#00CC66',
+    CLICK_COLOR: '#0080FF',
+    MISS_COLOR: '#FF8000',
+    BACKGROUND_COLOR: '#C0C0C0',
+    TIME: 15000,
+    TRACKER_SIZE: 30,
+    BACKGROUND_SUBSTRACTION_SETTING: true,
+    BACKGROUND_FRAMES: 15,
+
     HD_CONSTRAINTS: {
         video: {
             mandatory: {
@@ -13,19 +23,11 @@ pafcal.constants = {
                 minHeight: 720
             }
         }
-    },
-    TIME: 15000,
-    BACKGROUND_FRAMES: 15,
-    TRACKER_SIZE: 30,
-    BACKGROUND_SUBSTRACTION_SETTING: true,
-    BACKGROUND_COLOR: '#C0C0C0',
-    MOVE_COLOR: '#00CC66',
-    CLICK_COLOR: '#0080FF',
-    MISS_COLOR: '#FF8000',
+    }
 };
 
 if (window.Worker) {
-    var worker = new Worker("js/pafcal/pafcal.worker.js");
+    var worker = new Worker(pafcal.constants.WORKER_PATH);
 
     pafcal.start = function(configuration) {
         _setUpCanvas();
@@ -50,20 +52,20 @@ if (window.Worker) {
     };
 
     pafcal.click = function(point) {
-        var ev = document.createEvent("MouseEvent");
-        ev.initMouseEvent(
+        var event = document.createEvent("MouseEvent");
+        event.initMouseEvent(
             "click",
-            true /* bubble */ , true /* cancelable */ ,
+            true, true,
             window, null,
-            point.x, point.y, 0, 0, /* coordinates */
-            false, false, false, false, /* modifier keys */
-            0 /*left*/ , null
+            point.x, point.y, 0, 0, 
+            false, false, false, false, 
+            0  , null
         );
-        var el = document.elementFromPoint(point.x, point.y);
-        el.dispatchEvent(ev);
+        var topElement = document.elementFromPoint(point.x, point.y);
+        topElement.dispatchEvent(event);
     };
 
-    pafcal.showTracker = function(point, color) {
+    pafcal.showTracker = function(point, state) {
         var tracker = document.getElementById("PAFCAL_TRACKER"),
             widthRatio = (document.documentElement.clientWidth - 80) / pafcal.constants.WIDTH,
             heightRatio = (document.documentElement.clientHeight - 50) / pafcal.constants.HEIGHT,
@@ -71,73 +73,54 @@ if (window.Worker) {
             trackerY = (point.y - pafcal.constants.TRACKER_SIZE / 2) * heightRatio;
 
         tracker.style.display = "initial";
-        tracker.style.background = color;
         tracker.style.left = trackerX + "px";
         tracker.style.top = trackerY + "px";
         tracker.style.right = null;
         tracker.style.bottom = null;
+        tracker.style.border = null;
+
+
+        switch (state) {
+            case 'MOVE':
+                tracker.style.background = pafcal.constants.MOVE_COLOR;
+                break;
+            case 'CLICK':
+                tracker.style.background = pafcal.constants.CLICK_COLOR;
+                break;
+            case 'SECOND_CLICK':
+                tracker.style.background = pafcal.constants.CLICK_COLOR;
+                tracker.style.border: "3px solid black";
+                break;
+            default:
+                break;
+        }
+        return { x: trackerX, y: trackerY };
+
     };
 
     pafcal.miss = function() {
         var tracker = document.getElementById("PAFCAL_TRACKER");
+        
         tracker.style.display = "initial";
-        tracker.style.background = color;
-        tracker.style.top = null;
-        tracker.style.left = null;
+        tracker.style.background = pafcal.constants.MISS_COLOR;
         tracker.style.right = "30px";
         tracker.style.bottom = "30px";
+
+        tracker.style.top = null;
+        tracker.style.left = null;
+        tracker.style.border = null;
+
     };
 
     pafcal.setUpCommunications = function(e) {
         switch (e.data.type) {
-
-            case 'FACE':
-                var videoCanvas = document.getElementById("videoCanvas");
-                var ctx = videoCanvas.getContext("2d");
-                var rect = e.data.data;
-
-                ctx.beginPath();
-                ctx.lineWidth = "6";
-                ctx.strokeStyle = "red";
-                ctx.rect(rect.x, rect.y, rect.width, rect.height);
-                ctx.stroke();
-
-                break;
-            case 'CONVEX_HULL':
-                break;
-                var canvas = document.getElementById("resultCanvas");
-                var ctx = canvas.getContext('2d');
-                var imageData = ctx.createImageData(pafcal.constants.WIDTH, pafcal.constants.HEIGHT);
-                for (var i = 0; i < e.data.data.image.col.length; i++) {
-                    var point = _getPointBasedOnIndex(i, e.data.data.image),
-                        index = (point.y * pafcal.constants.WIDTH + point.x) * 4;
-                    imageData.data[index + 3] = 255;
-                    imageData.data[index + 1] = 255;
-                }
-                ctx.putImageData(imageData, 0, 0);
-
-                var points = e.data.data.points;
-                ctx.beginPath();
-                ctx.lineWidth = "6";
-                ctx.strokeStyle = "red";
-                ctx.moveTo(points[0].x, points[0].y);
-
-                for (var i = 1; i < points.length; i++) {
-                    ctx.lineTo(points[i].x, points[i].y);
-                }
-                ctx.closePath();
-                ctx.stroke();
-
-                var videoCanvas = document.getElementById("videoCanvas");
-                videoCanvas.getContext('2d').drawImage(pafcal.video, 0, 0, pafcal.constants.WIDTH, pafcal.constants.HEIGHT);
-                break;
             case 'IMAGE':
                 _sendImage('IMAGE', worker);
                 break;
             case 'MOVE':
-                pafcal.showTracker(e.data.data.point, pafcal.constants.MOVE_COLOR);
+                pafcal.showTracker(e.data.data.point, 'MOVE');
                 break;
-                var canvas = document.getElementById("resultCanvas");
+                /*var canvas = document.getElementById("resultCanvas");
                 var ctx = canvas.getContext('2d');
                 var qwer = ctx.createImageData(pafcal.constants.WIDTH, pafcal.constants.HEIGHT);
                 for (var i = 0; i < e.data.data.image.size; i++) {
@@ -158,18 +141,18 @@ if (window.Worker) {
                     ctx.lineTo(points[i].x, points[i].y);
                 }
                 ctx.closePath();
-                ctx.stroke();
+                ctx.stroke();*/
 
                 break;
             case 'CLICK':
-                pafcal.showTracker(e.data.data.point);
-                var widthRatio = (document.documentElement.clientWidth - 80) / pafcal.constants.WIDTH,
-                    heightRatio = (document.documentElement.clientHeight - 50) / pafcal.constants.HEIGHT,
-                    trackerX = (e.data.data.point.x - pafcal.constants.TRACKER_SIZE / 2) * widthRatio,
-                    trackerY = (e.data.data.point.y - pafcal.constants.TRACKER_SIZE / 2) * heightRatio;
-                pafcal.click({ x: trackerX, y: trackerY });
+                var center = pafcal.showTracker(e.data.data.point, 'CLICK');
+                pafcal.click(center);
+                break;
+            case 'SECOND_CLICK':
+                pafcal.showTracker(e.data.data.point, 'SECOND_CLICK');
+                break;
             case 'MISS':
-                pafcal.miss(pafcal.constants.MISS_COLOR);
+                pafcal.miss();
                 break;
             default:
                 break;
@@ -236,7 +219,6 @@ function _setUpRecording(worker) {
         }
     );
     pafcal.video.onplay = function(ev) {
-        console.log("on play");
         worker.onmessage = pafcal.setUpCommunications;
     };
 };
