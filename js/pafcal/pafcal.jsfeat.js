@@ -1,4 +1,1856 @@
 /**
+ * @author Eugene Zatepyakin / http://inspirit.ru/
+ */
+
+var jsfeat = jsfeat || { REVISION: 'ALPHA' };
+
+(function(global) {
+    "use strict";
+
+    // implementation from CCV project
+    // currently working only with u8,s32,f32
+    var U8_t = 0x0100;
+    var C1_t = 0x01
+    var _data_type_size = new Int32Array([-1, 1, 4, -1, 4, -1, -1, -1, 8, -1, -1, -1, -1, -1, -1, -1, 8]);
+
+    var get_data_type = (function() {
+        return function(type) {
+            return (type & 0xFF00);
+        }
+    })();
+
+    var get_channel = (function() {
+        return function(type) {
+            return (type & 0xFF);
+        }
+    })();
+
+    var get_data_type_size = (function() {
+        return function(type) {
+            return _data_type_size[(type & 0xFF00) >> 8];
+        }
+    })();
+
+    // color conversion
+    var COLOR_RGBA2GRAY = 0;
+    var COLOR_RGB2GRAY = 1;
+    var COLOR_BGRA2GRAY = 2;
+    var COLOR_BGR2GRAY = 3;
+
+
+    var data_t = (function() {
+        function data_t(size_in_bytes, buffer) {
+            // we need align size to multiple of 8
+            this.size = ((size_in_bytes + 7) | 0) & -8;
+            if (typeof buffer === "undefined") {
+                this.buffer = new ArrayBuffer(this.size);
+            } else {
+                this.buffer = buffer;
+                this.size = buffer.length;
+            }
+            this.u8 = new Uint8Array(this.buffer);
+            this.i32 = new Int32Array(this.buffer);
+            this.f32 = new Float32Array(this.buffer);
+            this.f64 = new Float64Array(this.buffer);
+        }
+        return data_t;
+    })();
+
+    var matrix_t = (function() {
+        // columns, rows, data_type
+        function matrix_t(c, r, data_type, data_buffer) {
+            this.type = get_data_type(data_type) | 0;
+            this.channel = get_channel(data_type) | 0;
+            this.cols = c | 0;
+            this.rows = r | 0;
+            if (typeof data_buffer === "undefined") {
+                this.allocate();
+            } else {
+                this.buffer = data_buffer;
+                // data user asked for
+                this.data = this.type & U8_t ? this.buffer.u8 : (this.type & S32_t ? this.buffer.i32 : (this.type & F32_t ? this.buffer.f32 : this.buffer.f64));
+            }
+        }
+        matrix_t.prototype.allocate = function() {
+            // clear references
+            delete this.data;
+            delete this.buffer;
+            //
+            this.buffer = new data_t((this.cols * get_data_type_size(this.type) * this.channel) * this.rows);
+            this.data = this.type & U8_t ? this.buffer.u8 : (this.type & S32_t ? this.buffer.i32 : (this.type & F32_t ? this.buffer.f32 : this.buffer.f64));
+        }
+        matrix_t.prototype.copy_to = function(other) {
+            var od = other.data,
+                td = this.data;
+            var i = 0,
+                n = (this.cols * this.rows * this.channel) | 0;
+            for (; i < n - 4; i += 4) {
+                od[i] = td[i];
+                od[i + 1] = td[i + 1];
+                od[i + 2] = td[i + 2];
+                od[i + 3] = td[i + 3];
+            }
+            for (; i < n; ++i) {
+                od[i] = td[i];
+            }
+        }
+        matrix_t.prototype.resize = function(c, r, ch) {
+            if (typeof ch === "undefined") { ch = this.channel; }
+            // relocate buffer only if new size doesnt fit
+            var new_size = (c * get_data_type_size(this.type) * ch) * r;
+            if (new_size > this.buffer.size) {
+                this.cols = c;
+                this.rows = r;
+                this.channel = ch;
+                this.allocate();
+            } else {
+                this.cols = c;
+                this.rows = r;
+                this.channel = ch;
+            }
+        }
+
+        return matrix_t;
+    })();
+
+    // data types
+    global.U8_t = U8_t;
+    global.C1_t = C1_t;
+
+    // color convert
+    global.COLOR_RGBA2GRAY = COLOR_RGBA2GRAY;
+    global.COLOR_RGB2GRAY = COLOR_RGB2GRAY;
+    global.COLOR_BGRA2GRAY = COLOR_BGRA2GRAY;
+    global.COLOR_BGR2GRAY = COLOR_BGR2GRAY;
+
+    // options
+    global.data_t = data_t;
+    global.matrix_t = matrix_t;
+
+})(jsfeat);
+
+(function(global) {
+    "use strict";
+    //
+
+    var cache = (function() {
+
+        // very primitive array cache, still need testing if it helps
+        // of course V8 has its own powerful cache sys but i'm not sure
+        // it caches several multichannel 640x480 buffer creations each frame
+
+        var _pool_node_t = (function() {
+            function _pool_node_t(size_in_bytes) {
+                this.next = null;
+                this.data = new jsfeat.data_t(size_in_bytes);
+                this.size = this.data.size;
+                this.buffer = this.data.buffer;
+                this.u8 = this.data.u8;
+                this.i32 = this.data.i32;
+                this.f32 = this.data.f32;
+                this.f64 = this.data.f64;
+            }
+            _pool_node_t.prototype.resize = function(size_in_bytes) {
+                delete this.data;
+                this.data = new jsfeat.data_t(size_in_bytes);
+                this.size = this.data.size;
+                this.buffer = this.data.buffer;
+                this.u8 = this.data.u8;
+                this.i32 = this.data.i32;
+                this.f32 = this.data.f32;
+                this.f64 = this.data.f64;
+            }
+            return _pool_node_t;
+        })();
+
+        var _pool_head, _pool_tail;
+        var _pool_size = 0;
+
+        return {
+
+            allocate: function(capacity, data_size) {
+                _pool_head = _pool_tail = new _pool_node_t(data_size);
+                for (var i = 0; i < capacity; ++i) {
+                    var node = new _pool_node_t(data_size);
+                    _pool_tail = _pool_tail.next = node;
+
+                    _pool_size++;
+                }
+            },
+
+            get_buffer: function(size_in_bytes) {
+                // assume we have enough free nodes
+                var node = _pool_head;
+                _pool_head = _pool_head.next;
+                _pool_size--;
+
+                if (size_in_bytes > node.size) {
+                    node.resize(size_in_bytes);
+                }
+
+                return node;
+            },
+
+            put_buffer: function(node) {
+                _pool_tail = _pool_tail.next = node;
+                _pool_size++;
+            }
+        };
+    })();
+
+    global.cache = cache;
+    // for now we dont need more than 30 buffers
+    // if having cache sys really helps we can add auto extending sys
+    cache.allocate(30, 640 * 4);
+
+})(jsfeat);
+
+(function(global) {
+    "use strict";
+    //
+
+    var imgproc = (function() {
+
+        var _resample_u8 = function(src, dst, nw, nh) {
+            var xofs_count = 0;
+            var ch = src.channel,
+                w = src.cols,
+                h = src.rows;
+            var src_d = src.data,
+                dst_d = dst.data;
+            var scale_x = w / nw,
+                scale_y = h / nh;
+            var inv_scale_256 = (scale_x * scale_y * 0x10000) | 0;
+            var dx = 0,
+                dy = 0,
+                sx = 0,
+                sy = 0,
+                sx1 = 0,
+                sx2 = 0,
+                i = 0,
+                k = 0,
+                fsx1 = 0.0,
+                fsx2 = 0.0;
+            var a = 0,
+                b = 0,
+                dxn = 0,
+                alpha = 0,
+                beta = 0,
+                beta1 = 0;
+
+            var buf_node = jsfeat.cache.get_buffer((nw * ch) << 2);
+            var sum_node = jsfeat.cache.get_buffer((nw * ch) << 2);
+            var xofs_node = jsfeat.cache.get_buffer((w * 2 * 3) << 2);
+
+            var buf = buf_node.i32;
+            var sum = sum_node.i32;
+            var xofs = xofs_node.i32;
+
+            for (; dx < nw; dx++) {
+                fsx1 = dx * scale_x, fsx2 = fsx1 + scale_x;
+                sx1 = (fsx1 + 1.0 - 1e-6) | 0, sx2 = fsx2 | 0;
+                sx1 = Math.min(sx1, w - 1);
+                sx2 = Math.min(sx2, w - 1);
+
+                if (sx1 > fsx1) {
+                    xofs[k++] = (dx * ch) | 0;
+                    xofs[k++] = ((sx1 - 1) * ch) | 0;
+                    xofs[k++] = ((sx1 - fsx1) * 0x100) | 0;
+                    xofs_count++;
+                }
+                for (sx = sx1; sx < sx2; sx++) {
+                    xofs_count++;
+                    xofs[k++] = (dx * ch) | 0;
+                    xofs[k++] = (sx * ch) | 0;
+                    xofs[k++] = 256;
+                }
+                if (fsx2 - sx2 > 1e-3) {
+                    xofs_count++;
+                    xofs[k++] = (dx * ch) | 0;
+                    xofs[k++] = (sx2 * ch) | 0;
+                    xofs[k++] = ((fsx2 - sx2) * 256) | 0;
+                }
+            }
+
+            for (dx = 0; dx < nw * ch; dx++) {
+                buf[dx] = sum[dx] = 0;
+            }
+            dy = 0;
+            for (sy = 0; sy < h; sy++) {
+                a = w * sy;
+                for (k = 0; k < xofs_count; k++) {
+                    dxn = xofs[k * 3];
+                    sx1 = xofs[k * 3 + 1];
+                    alpha = xofs[k * 3 + 2];
+                    for (i = 0; i < ch; i++) {
+                        buf[dxn + i] += src_d[a + sx1 + i] * alpha;
+                    }
+                }
+                if ((dy + 1) * scale_y <= sy + 1 || sy == h - 1) {
+                    beta = (Math.max(sy + 1 - (dy + 1) * scale_y, 0.0) * 256) | 0;
+                    beta1 = 256 - beta;
+                    b = nw * dy;
+                    if (beta <= 0) {
+                        for (dx = 0; dx < nw * ch; dx++) {
+                            dst_d[b + dx] = Math.min(Math.max((sum[dx] + buf[dx] * 256) / inv_scale_256, 0), 255);
+                            sum[dx] = buf[dx] = 0;
+                        }
+                    } else {
+                        for (dx = 0; dx < nw * ch; dx++) {
+                            dst_d[b + dx] = Math.min(Math.max((sum[dx] + buf[dx] * beta1) / inv_scale_256, 0), 255);
+                            sum[dx] = buf[dx] * beta;
+                            buf[dx] = 0;
+                        }
+                    }
+                    dy++;
+                } else {
+                    for (dx = 0; dx < nw * ch; dx++) {
+                        sum[dx] += buf[dx] * 256;
+                        buf[dx] = 0;
+                    }
+                }
+            }
+
+            jsfeat.cache.put_buffer(sum_node);
+            jsfeat.cache.put_buffer(buf_node);
+            jsfeat.cache.put_buffer(xofs_node);
+        }
+
+        var _resample = function(src, dst, nw, nh) {
+            var xofs_count = 0;
+            var ch = src.channel,
+                w = src.cols,
+                h = src.rows;
+            var src_d = src.data,
+                dst_d = dst.data;
+            var scale_x = w / nw,
+                scale_y = h / nh;
+            var scale = 1.0 / (scale_x * scale_y);
+            var dx = 0,
+                dy = 0,
+                sx = 0,
+                sy = 0,
+                sx1 = 0,
+                sx2 = 0,
+                i = 0,
+                k = 0,
+                fsx1 = 0.0,
+                fsx2 = 0.0;
+            var a = 0,
+                b = 0,
+                dxn = 0,
+                alpha = 0.0,
+                beta = 0.0,
+                beta1 = 0.0;
+
+            var buf_node = jsfeat.cache.get_buffer((nw * ch) << 2);
+            var sum_node = jsfeat.cache.get_buffer((nw * ch) << 2);
+            var xofs_node = jsfeat.cache.get_buffer((w * 2 * 3) << 2);
+
+            var buf = buf_node.f32;
+            var sum = sum_node.f32;
+            var xofs = xofs_node.f32;
+
+            for (; dx < nw; dx++) {
+                fsx1 = dx * scale_x, fsx2 = fsx1 + scale_x;
+                sx1 = (fsx1 + 1.0 - 1e-6) | 0, sx2 = fsx2 | 0;
+                sx1 = Math.min(sx1, w - 1);
+                sx2 = Math.min(sx2, w - 1);
+
+                if (sx1 > fsx1) {
+                    xofs_count++;
+                    xofs[k++] = ((sx1 - 1) * ch) | 0;
+                    xofs[k++] = (dx * ch) | 0;
+                    xofs[k++] = (sx1 - fsx1) * scale;
+                }
+                for (sx = sx1; sx < sx2; sx++) {
+                    xofs_count++;
+                    xofs[k++] = (sx * ch) | 0;
+                    xofs[k++] = (dx * ch) | 0;
+                    xofs[k++] = scale;
+                }
+                if (fsx2 - sx2 > 1e-3) {
+                    xofs_count++;
+                    xofs[k++] = (sx2 * ch) | 0;
+                    xofs[k++] = (dx * ch) | 0;
+                    xofs[k++] = (fsx2 - sx2) * scale;
+                }
+            }
+
+            for (dx = 0; dx < nw * ch; dx++) {
+                buf[dx] = sum[dx] = 0;
+            }
+            dy = 0;
+            for (sy = 0; sy < h; sy++) {
+                a = w * sy;
+                for (k = 0; k < xofs_count; k++) {
+                    sx1 = xofs[k * 3] | 0;
+                    dxn = xofs[k * 3 + 1] | 0;
+                    alpha = xofs[k * 3 + 2];
+                    for (i = 0; i < ch; i++) {
+                        buf[dxn + i] += src_d[a + sx1 + i] * alpha;
+                    }
+                }
+                if ((dy + 1) * scale_y <= sy + 1 || sy == h - 1) {
+                    beta = Math.max(sy + 1 - (dy + 1) * scale_y, 0.0);
+                    beta1 = 1.0 - beta;
+                    b = nw * dy;
+                    if (Math.abs(beta) < 1e-3) {
+                        for (dx = 0; dx < nw * ch; dx++) {
+                            dst_d[b + dx] = sum[dx] + buf[dx];
+                            sum[dx] = buf[dx] = 0;
+                        }
+                    } else {
+                        for (dx = 0; dx < nw * ch; dx++) {
+                            dst_d[b + dx] = sum[dx] + buf[dx] * beta1;
+                            sum[dx] = buf[dx] * beta;
+                            buf[dx] = 0;
+                        }
+                    }
+                    dy++;
+                } else {
+                    for (dx = 0; dx < nw * ch; dx++) {
+                        sum[dx] += buf[dx];
+                        buf[dx] = 0;
+                    }
+                }
+            }
+            jsfeat.cache.put_buffer(sum_node);
+            jsfeat.cache.put_buffer(buf_node);
+            jsfeat.cache.put_buffer(xofs_node);
+        }
+
+        var _convol_u8 = function(buf, src_d, dst_d, w, h, filter, kernel_size, half_kernel) {
+            var i = 0,
+                j = 0,
+                k = 0,
+                sp = 0,
+                dp = 0,
+                sum = 0,
+                sum1 = 0,
+                sum2 = 0,
+                sum3 = 0,
+                f0 = filter[0],
+                fk = 0;
+            var w2 = w << 1,
+                w3 = w * 3,
+                w4 = w << 2;
+            // hor pass
+            for (; i < h; ++i) {
+                sum = src_d[sp];
+                for (j = 0; j < half_kernel; ++j) {
+                    buf[j] = sum;
+                }
+                for (j = 0; j <= w - 2; j += 2) {
+                    buf[j + half_kernel] = src_d[sp + j];
+                    buf[j + half_kernel + 1] = src_d[sp + j + 1];
+                }
+                for (; j < w; ++j) {
+                    buf[j + half_kernel] = src_d[sp + j];
+                }
+                sum = src_d[sp + w - 1];
+                for (j = w; j < half_kernel + w; ++j) {
+                    buf[j + half_kernel] = sum;
+                }
+                for (j = 0; j <= w - 4; j += 4) {
+                    sum = buf[j] * f0,
+                        sum1 = buf[j + 1] * f0,
+                        sum2 = buf[j + 2] * f0,
+                        sum3 = buf[j + 3] * f0;
+                    for (k = 1; k < kernel_size; ++k) {
+                        fk = filter[k];
+                        sum += buf[k + j] * fk;
+                        sum1 += buf[k + j + 1] * fk;
+                        sum2 += buf[k + j + 2] * fk;
+                        sum3 += buf[k + j + 3] * fk;
+                    }
+                    dst_d[dp + j] = Math.min(sum >> 8, 255);
+                    dst_d[dp + j + 1] = Math.min(sum1 >> 8, 255);
+                    dst_d[dp + j + 2] = Math.min(sum2 >> 8, 255);
+                    dst_d[dp + j + 3] = Math.min(sum3 >> 8, 255);
+                }
+                for (; j < w; ++j) {
+                    sum = buf[j] * f0;
+                    for (k = 1; k < kernel_size; ++k) {
+                        sum += buf[k + j] * filter[k];
+                    }
+                    dst_d[dp + j] = Math.min(sum >> 8, 255);
+                }
+                sp += w;
+                dp += w;
+            }
+
+            // vert pass
+            for (i = 0; i < w; ++i) {
+                sum = dst_d[i];
+                for (j = 0; j < half_kernel; ++j) {
+                    buf[j] = sum;
+                }
+                k = i;
+                for (j = 0; j <= h - 2; j += 2, k += w2) {
+                    buf[j + half_kernel] = dst_d[k];
+                    buf[j + half_kernel + 1] = dst_d[k + w];
+                }
+                for (; j < h; ++j, k += w) {
+                    buf[j + half_kernel] = dst_d[k];
+                }
+                sum = dst_d[(h - 1) * w + i];
+                for (j = h; j < half_kernel + h; ++j) {
+                    buf[j + half_kernel] = sum;
+                }
+                dp = i;
+                for (j = 0; j <= h - 4; j += 4, dp += w4) {
+                    sum = buf[j] * f0,
+                        sum1 = buf[j + 1] * f0,
+                        sum2 = buf[j + 2] * f0,
+                        sum3 = buf[j + 3] * f0;
+                    for (k = 1; k < kernel_size; ++k) {
+                        fk = filter[k];
+                        sum += buf[k + j] * fk;
+                        sum1 += buf[k + j + 1] * fk;
+                        sum2 += buf[k + j + 2] * fk;
+                        sum3 += buf[k + j + 3] * fk;
+                    }
+                    dst_d[dp] = Math.min(sum >> 8, 255);
+                    dst_d[dp + w] = Math.min(sum1 >> 8, 255);
+                    dst_d[dp + w2] = Math.min(sum2 >> 8, 255);
+                    dst_d[dp + w3] = Math.min(sum3 >> 8, 255);
+                }
+                for (; j < h; ++j, dp += w) {
+                    sum = buf[j] * f0;
+                    for (k = 1; k < kernel_size; ++k) {
+                        sum += buf[k + j] * filter[k];
+                    }
+                    dst_d[dp] = Math.min(sum >> 8, 255);
+                }
+            }
+        }
+
+        var _convol = function(buf, src_d, dst_d, w, h, filter, kernel_size, half_kernel) {
+            var i = 0,
+                j = 0,
+                k = 0,
+                sp = 0,
+                dp = 0,
+                sum = 0.0,
+                sum1 = 0.0,
+                sum2 = 0.0,
+                sum3 = 0.0,
+                f0 = filter[0],
+                fk = 0.0;
+            var w2 = w << 1,
+                w3 = w * 3,
+                w4 = w << 2;
+            // hor pass
+            for (; i < h; ++i) {
+                sum = src_d[sp];
+                for (j = 0; j < half_kernel; ++j) {
+                    buf[j] = sum;
+                }
+                for (j = 0; j <= w - 2; j += 2) {
+                    buf[j + half_kernel] = src_d[sp + j];
+                    buf[j + half_kernel + 1] = src_d[sp + j + 1];
+                }
+                for (; j < w; ++j) {
+                    buf[j + half_kernel] = src_d[sp + j];
+                }
+                sum = src_d[sp + w - 1];
+                for (j = w; j < half_kernel + w; ++j) {
+                    buf[j + half_kernel] = sum;
+                }
+                for (j = 0; j <= w - 4; j += 4) {
+                    sum = buf[j] * f0,
+                        sum1 = buf[j + 1] * f0,
+                        sum2 = buf[j + 2] * f0,
+                        sum3 = buf[j + 3] * f0;
+                    for (k = 1; k < kernel_size; ++k) {
+                        fk = filter[k];
+                        sum += buf[k + j] * fk;
+                        sum1 += buf[k + j + 1] * fk;
+                        sum2 += buf[k + j + 2] * fk;
+                        sum3 += buf[k + j + 3] * fk;
+                    }
+                    dst_d[dp + j] = sum;
+                    dst_d[dp + j + 1] = sum1;
+                    dst_d[dp + j + 2] = sum2;
+                    dst_d[dp + j + 3] = sum3;
+                }
+                for (; j < w; ++j) {
+                    sum = buf[j] * f0;
+                    for (k = 1; k < kernel_size; ++k) {
+                        sum += buf[k + j] * filter[k];
+                    }
+                    dst_d[dp + j] = sum;
+                }
+                sp += w;
+                dp += w;
+            }
+
+            // vert pass
+            for (i = 0; i < w; ++i) {
+                sum = dst_d[i];
+                for (j = 0; j < half_kernel; ++j) {
+                    buf[j] = sum;
+                }
+                k = i;
+                for (j = 0; j <= h - 2; j += 2, k += w2) {
+                    buf[j + half_kernel] = dst_d[k];
+                    buf[j + half_kernel + 1] = dst_d[k + w];
+                }
+                for (; j < h; ++j, k += w) {
+                    buf[j + half_kernel] = dst_d[k];
+                }
+                sum = dst_d[(h - 1) * w + i];
+                for (j = h; j < half_kernel + h; ++j) {
+                    buf[j + half_kernel] = sum;
+                }
+                dp = i;
+                for (j = 0; j <= h - 4; j += 4, dp += w4) {
+                    sum = buf[j] * f0,
+                        sum1 = buf[j + 1] * f0,
+                        sum2 = buf[j + 2] * f0,
+                        sum3 = buf[j + 3] * f0;
+                    for (k = 1; k < kernel_size; ++k) {
+                        fk = filter[k];
+                        sum += buf[k + j] * fk;
+                        sum1 += buf[k + j + 1] * fk;
+                        sum2 += buf[k + j + 2] * fk;
+                        sum3 += buf[k + j + 3] * fk;
+                    }
+                    dst_d[dp] = sum;
+                    dst_d[dp + w] = sum1;
+                    dst_d[dp + w2] = sum2;
+                    dst_d[dp + w3] = sum3;
+                }
+                for (; j < h; ++j, dp += w) {
+                    sum = buf[j] * f0;
+                    for (k = 1; k < kernel_size; ++k) {
+                        sum += buf[k + j] * filter[k];
+                    }
+                    dst_d[dp] = sum;
+                }
+            }
+        }
+
+        return {
+            // TODO: add support for RGB/BGR order
+            // for raw arrays
+            grayscale: function(src, w, h, dst, code) {
+                // this is default image data representation in browser
+                if (typeof code === "undefined") { code = jsfeat.COLOR_RGBA2GRAY; }
+                var x = 0,
+                    y = 0,
+                    i = 0,
+                    j = 0,
+                    ir = 0,
+                    jr = 0;
+                var coeff_r = 4899,
+                    coeff_g = 9617,
+                    coeff_b = 1868,
+                    cn = 4;
+
+                if (code == jsfeat.COLOR_BGRA2GRAY || code == jsfeat.COLOR_BGR2GRAY) {
+                    coeff_r = 1868;
+                    coeff_b = 4899;
+                }
+                if (code == jsfeat.COLOR_RGB2GRAY || code == jsfeat.COLOR_BGR2GRAY) {
+                    cn = 3;
+                }
+                var cn2 = cn << 1,
+                    cn3 = (cn * 3) | 0;
+
+                dst.resize(w, h, 1);
+                var dst_u8 = dst.data;
+
+                for (y = 0; y < h; ++y, j += w, i += w * cn) {
+                    for (x = 0, ir = i, jr = j; x <= w - 4; x += 4, ir += cn << 2, jr += 4) {
+                        dst_u8[jr] = (src[ir] * coeff_r + src[ir + 1] * coeff_g + src[ir + 2] * coeff_b + 8192) >> 14;
+                        dst_u8[jr + 1] = (src[ir + cn] * coeff_r + src[ir + cn + 1] * coeff_g + src[ir + cn + 2] * coeff_b + 8192) >> 14;
+                        dst_u8[jr + 2] = (src[ir + cn2] * coeff_r + src[ir + cn2 + 1] * coeff_g + src[ir + cn2 + 2] * coeff_b + 8192) >> 14;
+                        dst_u8[jr + 3] = (src[ir + cn3] * coeff_r + src[ir + cn3 + 1] * coeff_g + src[ir + cn3 + 2] * coeff_b + 8192) >> 14;
+                    }
+                    for (; x < w; ++x, ++jr, ir += cn) {
+                        dst_u8[jr] = (src[ir] * coeff_r + src[ir + 1] * coeff_g + src[ir + 2] * coeff_b + 8192) >> 14;
+                    }
+                }
+            },
+            // derived from CCV library
+            resample: function(src, dst, nw, nh) {
+                var h = src.rows,
+                    w = src.cols;
+                if (h > nh && w > nw) {
+                    dst.resize(nw, nh, src.channel);
+                    // using the fast alternative (fix point scale, 0x100 to avoid overflow)
+                    if (src.type & jsfeat.U8_t && dst.type & jsfeat.U8_t && h * w / (nh * nw) < 0x100) {
+                        _resample_u8(src, dst, nw, nh);
+                    } else {
+                        _resample(src, dst, nw, nh);
+                    }
+                }
+            },
+
+            box_blur_gray: function(src, dst, radius, options) {
+                if (typeof options === "undefined") { options = 0; }
+                var w = src.cols,
+                    h = src.rows,
+                    h2 = h << 1,
+                    w2 = w << 1;
+                var i = 0,
+                    x = 0,
+                    y = 0,
+                    end = 0;
+                var windowSize = ((radius << 1) + 1) | 0;
+                var radiusPlusOne = (radius + 1) | 0,
+                    radiusPlus2 = (radiusPlusOne + 1) | 0;
+                var scale = options & jsfeat.BOX_BLUR_NOSCALE ? 1 : (1.0 / (windowSize * windowSize));
+
+                var tmp_buff = jsfeat.cache.get_buffer((w * h) << 2);
+
+                var sum = 0,
+                    dstIndex = 0,
+                    srcIndex = 0,
+                    nextPixelIndex = 0,
+                    previousPixelIndex = 0;
+                var data_i32 = tmp_buff.i32; // to prevent overflow
+                var data_u8 = src.data;
+                var hold = 0;
+
+                dst.resize(w, h, src.channel);
+
+                // first pass
+                // no need to scale 
+                //data_u8 = src.data;
+                //data_i32 = tmp;
+                for (y = 0; y < h; ++y) {
+                    dstIndex = y;
+                    sum = radiusPlusOne * data_u8[srcIndex];
+
+                    for (i = (srcIndex + 1) | 0, end = (srcIndex + radius) | 0; i <= end; ++i) {
+                        sum += data_u8[i];
+                    }
+
+                    nextPixelIndex = (srcIndex + radiusPlusOne) | 0;
+                    previousPixelIndex = srcIndex;
+                    hold = data_u8[previousPixelIndex];
+                    for (x = 0; x < radius; ++x, dstIndex += h) {
+                        data_i32[dstIndex] = sum;
+                        sum += data_u8[nextPixelIndex] - hold;
+                        nextPixelIndex++;
+                    }
+                    for (; x < w - radiusPlus2; x += 2, dstIndex += h2) {
+                        data_i32[dstIndex] = sum;
+                        sum += data_u8[nextPixelIndex] - data_u8[previousPixelIndex];
+
+                        data_i32[dstIndex + h] = sum;
+                        sum += data_u8[nextPixelIndex + 1] - data_u8[previousPixelIndex + 1];
+
+                        nextPixelIndex += 2;
+                        previousPixelIndex += 2;
+                    }
+                    for (; x < w - radiusPlusOne; ++x, dstIndex += h) {
+                        data_i32[dstIndex] = sum;
+                        sum += data_u8[nextPixelIndex] - data_u8[previousPixelIndex];
+
+                        nextPixelIndex++;
+                        previousPixelIndex++;
+                    }
+
+                    hold = data_u8[nextPixelIndex - 1];
+                    for (; x < w; ++x, dstIndex += h) {
+                        data_i32[dstIndex] = sum;
+
+                        sum += hold - data_u8[previousPixelIndex];
+                        previousPixelIndex++;
+                    }
+
+                    srcIndex += w;
+                }
+                //
+                // second pass
+                srcIndex = 0;
+                //data_i32 = tmp; // this is a transpose
+                data_u8 = dst.data;
+
+                // dont scale result
+                if (scale == 1) {
+                    for (y = 0; y < w; ++y) {
+                        dstIndex = y;
+                        sum = radiusPlusOne * data_i32[srcIndex];
+
+                        for (i = (srcIndex + 1) | 0, end = (srcIndex + radius) | 0; i <= end; ++i) {
+                            sum += data_i32[i];
+                        }
+
+                        nextPixelIndex = srcIndex + radiusPlusOne;
+                        previousPixelIndex = srcIndex;
+                        hold = data_i32[previousPixelIndex];
+
+                        for (x = 0; x < radius; ++x, dstIndex += w) {
+                            data_u8[dstIndex] = sum;
+                            sum += data_i32[nextPixelIndex] - hold;
+                            nextPixelIndex++;
+                        }
+                        for (; x < h - radiusPlus2; x += 2, dstIndex += w2) {
+                            data_u8[dstIndex] = sum;
+                            sum += data_i32[nextPixelIndex] - data_i32[previousPixelIndex];
+
+                            data_u8[dstIndex + w] = sum;
+                            sum += data_i32[nextPixelIndex + 1] - data_i32[previousPixelIndex + 1];
+
+                            nextPixelIndex += 2;
+                            previousPixelIndex += 2;
+                        }
+                        for (; x < h - radiusPlusOne; ++x, dstIndex += w) {
+                            data_u8[dstIndex] = sum;
+
+                            sum += data_i32[nextPixelIndex] - data_i32[previousPixelIndex];
+                            nextPixelIndex++;
+                            previousPixelIndex++;
+                        }
+                        hold = data_i32[nextPixelIndex - 1];
+                        for (; x < h; ++x, dstIndex += w) {
+                            data_u8[dstIndex] = sum;
+
+                            sum += hold - data_i32[previousPixelIndex];
+                            previousPixelIndex++;
+                        }
+
+                        srcIndex += h;
+                    }
+                } else {
+                    for (y = 0; y < w; ++y) {
+                        dstIndex = y;
+                        sum = radiusPlusOne * data_i32[srcIndex];
+
+                        for (i = (srcIndex + 1) | 0, end = (srcIndex + radius) | 0; i <= end; ++i) {
+                            sum += data_i32[i];
+                        }
+
+                        nextPixelIndex = srcIndex + radiusPlusOne;
+                        previousPixelIndex = srcIndex;
+                        hold = data_i32[previousPixelIndex];
+
+                        for (x = 0; x < radius; ++x, dstIndex += w) {
+                            data_u8[dstIndex] = sum * scale;
+                            sum += data_i32[nextPixelIndex] - hold;
+                            nextPixelIndex++;
+                        }
+                        for (; x < h - radiusPlus2; x += 2, dstIndex += w2) {
+                            data_u8[dstIndex] = sum * scale;
+                            sum += data_i32[nextPixelIndex] - data_i32[previousPixelIndex];
+
+                            data_u8[dstIndex + w] = sum * scale;
+                            sum += data_i32[nextPixelIndex + 1] - data_i32[previousPixelIndex + 1];
+
+                            nextPixelIndex += 2;
+                            previousPixelIndex += 2;
+                        }
+                        for (; x < h - radiusPlusOne; ++x, dstIndex += w) {
+                            data_u8[dstIndex] = sum * scale;
+
+                            sum += data_i32[nextPixelIndex] - data_i32[previousPixelIndex];
+                            nextPixelIndex++;
+                            previousPixelIndex++;
+                        }
+                        hold = data_i32[nextPixelIndex - 1];
+                        for (; x < h; ++x, dstIndex += w) {
+                            data_u8[dstIndex] = sum * scale;
+
+                            sum += hold - data_i32[previousPixelIndex];
+                            previousPixelIndex++;
+                        }
+
+                        srcIndex += h;
+                    }
+                }
+
+                jsfeat.cache.put_buffer(tmp_buff);
+            },
+
+            gaussian_blur: function(src, dst, kernel_size, sigma) {
+                if (typeof sigma === "undefined") { sigma = 0.0; }
+                if (typeof kernel_size === "undefined") { kernel_size = 0; }
+                kernel_size = kernel_size == 0 ? (Math.max(1, (4.0 * sigma + 1.0 - 1e-8)) * 2 + 1) | 0 : kernel_size;
+                var half_kernel = kernel_size >> 1;
+                var w = src.cols,
+                    h = src.rows;
+                var data_type = src.type,
+                    is_u8 = data_type & jsfeat.U8_t;
+
+                dst.resize(w, h, src.channel);
+
+                var src_d = src.data,
+                    dst_d = dst.data;
+                var buf, filter, buf_sz = (kernel_size + Math.max(h, w)) | 0;
+
+                var buf_node = jsfeat.cache.get_buffer(buf_sz << 2);
+                var filt_node = jsfeat.cache.get_buffer(kernel_size << 2);
+
+                if (is_u8) {
+                    buf = buf_node.i32;
+                    filter = filt_node.i32;
+                } else if (data_type & jsfeat.S32_t) {
+                    buf = buf_node.i32;
+                    filter = filt_node.f32;
+                } else {
+                    buf = buf_node.f32;
+                    filter = filt_node.f32;
+                }
+
+                jsfeat.math.get_gaussian_kernel(kernel_size, sigma, filter, data_type);
+
+                if (is_u8) {
+                    _convol_u8(buf, src_d, dst_d, w, h, filter, kernel_size, half_kernel);
+                } else {
+                    _convol(buf, src_d, dst_d, w, h, filter, kernel_size, half_kernel);
+                }
+
+                jsfeat.cache.put_buffer(buf_node);
+                jsfeat.cache.put_buffer(filt_node);
+            },
+            // assume we always need it for u8 image
+            pyrdown: function(src, dst, sx, sy) {
+                // this is needed for bbf
+                if (typeof sx === "undefined") { sx = 0; }
+                if (typeof sy === "undefined") { sy = 0; }
+
+                var w = src.cols,
+                    h = src.rows;
+                var w2 = w >> 1,
+                    h2 = h >> 1;
+                var _w2 = w2 - (sx << 1),
+                    _h2 = h2 - (sy << 1);
+                var x = 0,
+                    y = 0,
+                    sptr = sx + sy * w,
+                    sline = 0,
+                    dptr = 0,
+                    dline = 0;
+
+                dst.resize(w2, h2, src.channel);
+
+                var src_d = src.data,
+                    dst_d = dst.data;
+
+                for (y = 0; y < _h2; ++y) {
+                    sline = sptr;
+                    dline = dptr;
+                    for (x = 0; x <= _w2 - 2; x += 2, dline += 2, sline += 4) {
+                        dst_d[dline] = (src_d[sline] + src_d[sline + 1] +
+                            src_d[sline + w] + src_d[sline + w + 1] + 2) >> 2;
+                        dst_d[dline + 1] = (src_d[sline + 2] + src_d[sline + 3] +
+                            src_d[sline + w + 2] + src_d[sline + w + 3] + 2) >> 2;
+                    }
+                    for (; x < _w2; ++x, ++dline, sline += 2) {
+                        dst_d[dline] = (src_d[sline] + src_d[sline + 1] +
+                            src_d[sline + w] + src_d[sline + w + 1] + 2) >> 2;
+                    }
+                    sptr += w << 1;
+                    dptr += w2;
+                }
+            },
+
+            // dst: [gx,gy,...]
+            scharr_derivatives: function(src, dst) {
+                var w = src.cols,
+                    h = src.rows;
+                var dstep = w << 1,
+                    x = 0,
+                    y = 0,
+                    x1 = 0,
+                    a, b, c, d, e, f;
+                var srow0 = 0,
+                    srow1 = 0,
+                    srow2 = 0,
+                    drow = 0;
+                var trow0, trow1;
+
+                dst.resize(w, h, 2); // 2 channel output gx, gy
+
+                var img = src.data,
+                    gxgy = dst.data;
+
+                var buf0_node = jsfeat.cache.get_buffer((w + 2) << 2);
+                var buf1_node = jsfeat.cache.get_buffer((w + 2) << 2);
+
+                if (src.type & jsfeat.U8_t || src.type & jsfeat.S32_t) {
+                    trow0 = buf0_node.i32;
+                    trow1 = buf1_node.i32;
+                } else {
+                    trow0 = buf0_node.f32;
+                    trow1 = buf1_node.f32;
+                }
+
+                for (; y < h; ++y, srow1 += w) {
+                    srow0 = ((y > 0 ? y - 1 : 1) * w) | 0;
+                    srow2 = ((y < h - 1 ? y + 1 : h - 2) * w) | 0;
+                    drow = (y * dstep) | 0;
+                    // do vertical convolution
+                    for (x = 0, x1 = 1; x <= w - 2; x += 2, x1 += 2) {
+                        a = img[srow0 + x], b = img[srow2 + x];
+                        trow0[x1] = ((a + b) * 3 + (img[srow1 + x]) * 10);
+                        trow1[x1] = (b - a);
+                        //
+                        a = img[srow0 + x + 1], b = img[srow2 + x + 1];
+                        trow0[x1 + 1] = ((a + b) * 3 + (img[srow1 + x + 1]) * 10);
+                        trow1[x1 + 1] = (b - a);
+                    }
+                    for (; x < w; ++x, ++x1) {
+                        a = img[srow0 + x], b = img[srow2 + x];
+                        trow0[x1] = ((a + b) * 3 + (img[srow1 + x]) * 10);
+                        trow1[x1] = (b - a);
+                    }
+                    // make border
+                    x = (w + 1) | 0;
+                    trow0[0] = trow0[1];
+                    trow0[x] = trow0[w];
+                    trow1[0] = trow1[1];
+                    trow1[x] = trow1[w];
+                    // do horizontal convolution, interleave the results and store them
+                    for (x = 0; x <= w - 4; x += 4) {
+                        a = trow1[x + 2], b = trow1[x + 1], c = trow1[x + 3], d = trow1[x + 4],
+                            e = trow0[x + 2], f = trow0[x + 3];
+                        gxgy[drow++] = (e - trow0[x]);
+                        gxgy[drow++] = ((a + trow1[x]) * 3 + b * 10);
+                        gxgy[drow++] = (f - trow0[x + 1]);
+                        gxgy[drow++] = ((c + b) * 3 + a * 10);
+
+                        gxgy[drow++] = ((trow0[x + 4] - e));
+                        gxgy[drow++] = (((d + a) * 3 + c * 10));
+                        gxgy[drow++] = ((trow0[x + 5] - f));
+                        gxgy[drow++] = (((trow1[x + 5] + c) * 3 + d * 10));
+                    }
+                    for (; x < w; ++x) {
+                        gxgy[drow++] = ((trow0[x + 2] - trow0[x]));
+                        gxgy[drow++] = (((trow1[x + 2] + trow1[x]) * 3 + trow1[x + 1] * 10));
+                    }
+                }
+                jsfeat.cache.put_buffer(buf0_node);
+                jsfeat.cache.put_buffer(buf1_node);
+            },
+
+            // compute gradient using Sobel kernel [1 2 1] * [-1 0 1]^T
+            // dst: [gx,gy,...]
+            sobel_derivatives: function(src, dst) {
+                var w = src.cols,
+                    h = src.rows;
+                var dstep = w << 1,
+                    x = 0,
+                    y = 0,
+                    x1 = 0,
+                    a, b, c, d, e, f;
+                var srow0 = 0,
+                    srow1 = 0,
+                    srow2 = 0,
+                    drow = 0;
+                var trow0, trow1;
+
+                dst.resize(w, h, 2); // 2 channel output gx, gy
+
+                var img = src.data,
+                    gxgy = dst.data;
+
+                var buf0_node = jsfeat.cache.get_buffer((w + 2) << 2);
+                var buf1_node = jsfeat.cache.get_buffer((w + 2) << 2);
+
+                if (src.type & jsfeat.U8_t || src.type & jsfeat.S32_t) {
+                    trow0 = buf0_node.i32;
+                    trow1 = buf1_node.i32;
+                } else {
+                    trow0 = buf0_node.f32;
+                    trow1 = buf1_node.f32;
+                }
+
+                for (; y < h; ++y, srow1 += w) {
+                    srow0 = ((y > 0 ? y - 1 : 1) * w) | 0;
+                    srow2 = ((y < h - 1 ? y + 1 : h - 2) * w) | 0;
+                    drow = (y * dstep) | 0;
+                    // do vertical convolution
+                    for (x = 0, x1 = 1; x <= w - 2; x += 2, x1 += 2) {
+                        a = img[srow0 + x], b = img[srow2 + x];
+                        trow0[x1] = ((a + b) + (img[srow1 + x] * 2));
+                        trow1[x1] = (b - a);
+                        //
+                        a = img[srow0 + x + 1], b = img[srow2 + x + 1];
+                        trow0[x1 + 1] = ((a + b) + (img[srow1 + x + 1] * 2));
+                        trow1[x1 + 1] = (b - a);
+                    }
+                    for (; x < w; ++x, ++x1) {
+                        a = img[srow0 + x], b = img[srow2 + x];
+                        trow0[x1] = ((a + b) + (img[srow1 + x] * 2));
+                        trow1[x1] = (b - a);
+                    }
+                    // make border
+                    x = (w + 1) | 0;
+                    trow0[0] = trow0[1];
+                    trow0[x] = trow0[w];
+                    trow1[0] = trow1[1];
+                    trow1[x] = trow1[w];
+                    // do horizontal convolution, interleave the results and store them
+                    for (x = 0; x <= w - 4; x += 4) {
+                        a = trow1[x + 2], b = trow1[x + 1], c = trow1[x + 3], d = trow1[x + 4],
+                            e = trow0[x + 2], f = trow0[x + 3];
+                        gxgy[drow++] = (e - trow0[x]);
+                        gxgy[drow++] = (a + trow1[x] + b * 2);
+                        gxgy[drow++] = (f - trow0[x + 1]);
+                        gxgy[drow++] = (c + b + a * 2);
+
+                        gxgy[drow++] = (trow0[x + 4] - e);
+                        gxgy[drow++] = (d + a + c * 2);
+                        gxgy[drow++] = (trow0[x + 5] - f);
+                        gxgy[drow++] = (trow1[x + 5] + c + d * 2);
+                    }
+                    for (; x < w; ++x) {
+                        gxgy[drow++] = (trow0[x + 2] - trow0[x]);
+                        gxgy[drow++] = (trow1[x + 2] + trow1[x] + trow1[x + 1] * 2);
+                    }
+                }
+                jsfeat.cache.put_buffer(buf0_node);
+                jsfeat.cache.put_buffer(buf1_node);
+            },
+
+            // please note: 
+            // dst_(type) size should be cols = src.cols+1, rows = src.rows+1
+            compute_integral_image: function(src, dst_sum, dst_sqsum, dst_tilted) {
+                var w0 = src.cols | 0,
+                    h0 = src.rows | 0,
+                    src_d = src.data;
+                var w1 = (w0 + 1) | 0;
+                var s = 0,
+                    s2 = 0,
+                    p = 0,
+                    pup = 0,
+                    i = 0,
+                    j = 0,
+                    v = 0,
+                    k = 0;
+
+                if (dst_sum && dst_sqsum) {
+                    // fill first row with zeros
+                    for (; i < w1; ++i) {
+                        dst_sum[i] = 0, dst_sqsum[i] = 0;
+                    }
+                    p = (w1 + 1) | 0, pup = 1;
+                    for (i = 0, k = 0; i < h0; ++i, ++p, ++pup) {
+                        s = s2 = 0;
+                        for (j = 0; j <= w0 - 2; j += 2, k += 2, p += 2, pup += 2) {
+                            v = src_d[k];
+                            s += v, s2 += v * v;
+                            dst_sum[p] = dst_sum[pup] + s;
+                            dst_sqsum[p] = dst_sqsum[pup] + s2;
+
+                            v = src_d[k + 1];
+                            s += v, s2 += v * v;
+                            dst_sum[p + 1] = dst_sum[pup + 1] + s;
+                            dst_sqsum[p + 1] = dst_sqsum[pup + 1] + s2;
+                        }
+                        for (; j < w0; ++j, ++k, ++p, ++pup) {
+                            v = src_d[k];
+                            s += v, s2 += v * v;
+                            dst_sum[p] = dst_sum[pup] + s;
+                            dst_sqsum[p] = dst_sqsum[pup] + s2;
+                        }
+                    }
+                } else if (dst_sum) {
+                    // fill first row with zeros
+                    for (; i < w1; ++i) {
+                        dst_sum[i] = 0;
+                    }
+                    p = (w1 + 1) | 0, pup = 1;
+                    for (i = 0, k = 0; i < h0; ++i, ++p, ++pup) {
+                        s = 0;
+                        for (j = 0; j <= w0 - 2; j += 2, k += 2, p += 2, pup += 2) {
+                            s += src_d[k];
+                            dst_sum[p] = dst_sum[pup] + s;
+                            s += src_d[k + 1];
+                            dst_sum[p + 1] = dst_sum[pup + 1] + s;
+                        }
+                        for (; j < w0; ++j, ++k, ++p, ++pup) {
+                            s += src_d[k];
+                            dst_sum[p] = dst_sum[pup] + s;
+                        }
+                    }
+                } else if (dst_sqsum) {
+                    // fill first row with zeros
+                    for (; i < w1; ++i) {
+                        dst_sqsum[i] = 0;
+                    }
+                    p = (w1 + 1) | 0, pup = 1;
+                    for (i = 0, k = 0; i < h0; ++i, ++p, ++pup) {
+                        s2 = 0;
+                        for (j = 0; j <= w0 - 2; j += 2, k += 2, p += 2, pup += 2) {
+                            v = src_d[k];
+                            s2 += v * v;
+                            dst_sqsum[p] = dst_sqsum[pup] + s2;
+                            v = src_d[k + 1];
+                            s2 += v * v;
+                            dst_sqsum[p + 1] = dst_sqsum[pup + 1] + s2;
+                        }
+                        for (; j < w0; ++j, ++k, ++p, ++pup) {
+                            v = src_d[k];
+                            s2 += v * v;
+                            dst_sqsum[p] = dst_sqsum[pup] + s2;
+                        }
+                    }
+                }
+
+                if (dst_tilted) {
+                    // fill first row with zeros
+                    for (i = 0; i < w1; ++i) {
+                        dst_tilted[i] = 0;
+                    }
+                    // diagonal
+                    p = (w1 + 1) | 0, pup = 0;
+                    for (i = 0, k = 0; i < h0; ++i, ++p, ++pup) {
+                        for (j = 0; j <= w0 - 2; j += 2, k += 2, p += 2, pup += 2) {
+                            dst_tilted[p] = src_d[k] + dst_tilted[pup];
+                            dst_tilted[p + 1] = src_d[k + 1] + dst_tilted[pup + 1];
+                        }
+                        for (; j < w0; ++j, ++k, ++p, ++pup) {
+                            dst_tilted[p] = src_d[k] + dst_tilted[pup];
+                        }
+                    }
+                    // diagonal
+                    p = (w1 + w0) | 0, pup = w0;
+                    for (i = 0; i < h0; ++i, p += w1, pup += w1) {
+                        dst_tilted[p] += dst_tilted[pup];
+                    }
+
+                    for (j = w0 - 1; j > 0; --j) {
+                        p = j + h0 * w1, pup = p - w1;
+                        for (i = h0; i > 0; --i, p -= w1, pup -= w1) {
+                            dst_tilted[p] += dst_tilted[pup] + dst_tilted[pup + 1];
+                        }
+                    }
+                }
+            },
+            equalize_histogram: function(src, dst) {
+                var w = src.cols,
+                    h = src.rows,
+                    src_d = src.data;
+
+                dst.resize(w, h, src.channel);
+
+                var dst_d = dst.data,
+                    size = w * h;
+                var i = 0,
+                    prev = 0,
+                    hist0, norm;
+
+                var hist0_node = jsfeat.cache.get_buffer(256 << 2);
+                hist0 = hist0_node.i32;
+                for (; i < 256; ++i) hist0[i] = 0;
+                for (i = 0; i < size; ++i) {
+                    ++hist0[src_d[i]];
+                }
+
+                prev = hist0[0];
+                for (i = 1; i < 256; ++i) {
+                    prev = hist0[i] += prev;
+                }
+
+                norm = 255 / size;
+                for (i = 0; i < size; ++i) {
+                    dst_d[i] = (hist0[src_d[i]] * norm + 0.5) | 0;
+                }
+                jsfeat.cache.put_buffer(hist0_node);
+            },
+
+            canny: function(src, dst, low_thresh, high_thresh) {
+                var w = src.cols,
+                    h = src.rows,
+                    src_d = src.data;
+
+                dst.resize(w, h, src.channel);
+
+                var dst_d = dst.data;
+                var i = 0,
+                    j = 0,
+                    grad = 0,
+                    w2 = w << 1,
+                    _grad = 0,
+                    suppress = 0,
+                    f = 0,
+                    x = 0,
+                    y = 0,
+                    s = 0;
+                var tg22x = 0,
+                    tg67x = 0;
+
+                // cache buffers
+                var dxdy_node = jsfeat.cache.get_buffer((h * w2) << 2);
+                var buf_node = jsfeat.cache.get_buffer((3 * (w + 2)) << 2);
+                var map_node = jsfeat.cache.get_buffer(((h + 2) * (w + 2)) << 2);
+                var stack_node = jsfeat.cache.get_buffer((h * w) << 2);
+
+
+                var buf = buf_node.i32;
+                var map = map_node.i32;
+                var stack = stack_node.i32;
+                var dxdy = dxdy_node.i32;
+                var dxdy_m = new jsfeat.matrix_t(w, h, jsfeat.S32C2_t, dxdy_node.data);
+                var row0 = 1,
+                    row1 = (w + 2 + 1) | 0,
+                    row2 = (2 * (w + 2) + 1) | 0,
+                    map_w = (w + 2) | 0,
+                    map_i = (map_w + 1) | 0,
+                    stack_i = 0;
+
+                this.sobel_derivatives(src, dxdy_m);
+
+                if (low_thresh > high_thresh) {
+                    i = low_thresh;
+                    low_thresh = high_thresh;
+                    high_thresh = i;
+                }
+
+                i = (3 * (w + 2)) | 0;
+                while (--i >= 0) {
+                    buf[i] = 0;
+                }
+
+                i = ((h + 2) * (w + 2)) | 0;
+                while (--i >= 0) {
+                    map[i] = 0;
+                }
+
+                for (; j < w; ++j, grad += 2) {
+                    //buf[row1+j] = Math.abs(dxdy[grad]) + Math.abs(dxdy[grad+1]);
+                    x = dxdy[grad], y = dxdy[grad + 1];
+                    //buf[row1+j] = x*x + y*y;
+                    buf[row1 + j] = ((x ^ (x >> 31)) - (x >> 31)) + ((y ^ (y >> 31)) - (y >> 31));
+                }
+
+                for (i = 1; i <= h; ++i, grad += w2) {
+                    if (i == h) {
+                        j = row2 + w;
+                        while (--j >= row2) {
+                            buf[j] = 0;
+                        }
+                    } else {
+                        for (j = 0; j < w; j++) {
+                            //buf[row2+j] =  Math.abs(dxdy[grad+(j<<1)]) + Math.abs(dxdy[grad+(j<<1)+1]);
+                            x = dxdy[grad + (j << 1)], y = dxdy[grad + (j << 1) + 1];
+                            //buf[row2+j] = x*x + y*y;
+                            buf[row2 + j] = ((x ^ (x >> 31)) - (x >> 31)) + ((y ^ (y >> 31)) - (y >> 31));
+                        }
+                    }
+                    _grad = (grad - w2) | 0;
+                    map[map_i - 1] = 0;
+                    suppress = 0;
+                    for (j = 0; j < w; ++j, _grad += 2) {
+                        f = buf[row1 + j];
+                        if (f > low_thresh) {
+                            x = dxdy[_grad];
+                            y = dxdy[_grad + 1];
+                            s = x ^ y;
+                            // seems ot be faster than Math.abs
+                            x = ((x ^ (x >> 31)) - (x >> 31)) | 0;
+                            y = ((y ^ (y >> 31)) - (y >> 31)) | 0;
+                            //x * tan(22.5) x * tan(67.5) == 2 * x + x * tan(22.5)
+                            tg22x = x * 13573;
+                            tg67x = tg22x + ((x + x) << 15);
+                            y <<= 15;
+                            if (y < tg22x) {
+                                if (f > buf[row1 + j - 1] && f >= buf[row1 + j + 1]) {
+                                    if (f > high_thresh && !suppress && map[map_i + j - map_w] != 2) {
+                                        map[map_i + j] = 2;
+                                        suppress = 1;
+                                        stack[stack_i++] = map_i + j;
+                                    } else {
+                                        map[map_i + j] = 1;
+                                    }
+                                    continue;
+                                }
+                            } else if (y > tg67x) {
+                                if (f > buf[row0 + j] && f >= buf[row2 + j]) {
+                                    if (f > high_thresh && !suppress && map[map_i + j - map_w] != 2) {
+                                        map[map_i + j] = 2;
+                                        suppress = 1;
+                                        stack[stack_i++] = map_i + j;
+                                    } else {
+                                        map[map_i + j] = 1;
+                                    }
+                                    continue;
+                                }
+                            } else {
+                                s = s < 0 ? -1 : 1;
+                                if (f > buf[row0 + j - s] && f > buf[row2 + j + s]) {
+                                    if (f > high_thresh && !suppress && map[map_i + j - map_w] != 2) {
+                                        map[map_i + j] = 2;
+                                        suppress = 1;
+                                        stack[stack_i++] = map_i + j;
+                                    } else {
+                                        map[map_i + j] = 1;
+                                    }
+                                    continue;
+                                }
+                            }
+                        }
+                        map[map_i + j] = 0;
+                        suppress = 0;
+                    }
+                    map[map_i + w] = 0;
+                    map_i += map_w;
+                    j = row0;
+                    row0 = row1;
+                    row1 = row2;
+                    row2 = j;
+                }
+
+                j = map_i - map_w - 1;
+                for (i = 0; i < map_w; ++i, ++j) {
+                    map[j] = 0;
+                }
+                // path following
+                while (stack_i > 0) {
+                    map_i = stack[--stack_i];
+                    map_i -= map_w + 1;
+                    if (map[map_i] == 1) map[map_i] = 2, stack[stack_i++] = map_i;
+                    map_i += 1;
+                    if (map[map_i] == 1) map[map_i] = 2, stack[stack_i++] = map_i;
+                    map_i += 1;
+                    if (map[map_i] == 1) map[map_i] = 2, stack[stack_i++] = map_i;
+                    map_i += map_w;
+                    if (map[map_i] == 1) map[map_i] = 2, stack[stack_i++] = map_i;
+                    map_i -= 2;
+                    if (map[map_i] == 1) map[map_i] = 2, stack[stack_i++] = map_i;
+                    map_i += map_w;
+                    if (map[map_i] == 1) map[map_i] = 2, stack[stack_i++] = map_i;
+                    map_i += 1;
+                    if (map[map_i] == 1) map[map_i] = 2, stack[stack_i++] = map_i;
+                    map_i += 1;
+                    if (map[map_i] == 1) map[map_i] = 2, stack[stack_i++] = map_i;
+                }
+
+                map_i = map_w + 1;
+                row0 = 0;
+                for (i = 0; i < h; ++i, map_i += map_w) {
+                    for (j = 0; j < w; ++j) {
+                        dst_d[row0++] = (map[map_i + j] == 2) * 0xff;
+                    }
+                }
+
+                // free buffers
+                jsfeat.cache.put_buffer(dxdy_node);
+                jsfeat.cache.put_buffer(buf_node);
+                jsfeat.cache.put_buffer(map_node);
+                jsfeat.cache.put_buffer(stack_node);
+            },
+            // transform is 3x3 matrix_t
+            warp_perspective: function(src, dst, transform, fill_value) {
+                if (typeof fill_value === "undefined") { fill_value = 0; }
+                var src_width = src.cols | 0,
+                    src_height = src.rows | 0,
+                    dst_width = dst.cols | 0,
+                    dst_height = dst.rows | 0;
+                var src_d = src.data,
+                    dst_d = dst.data;
+                var x = 0,
+                    y = 0,
+                    off = 0,
+                    ixs = 0,
+                    iys = 0,
+                    xs = 0.0,
+                    ys = 0.0,
+                    xs0 = 0.0,
+                    ys0 = 0.0,
+                    ws = 0.0,
+                    sc = 0.0,
+                    a = 0.0,
+                    b = 0.0,
+                    p0 = 0.0,
+                    p1 = 0.0;
+                var td = transform.data;
+                var m00 = td[0],
+                    m01 = td[1],
+                    m02 = td[2],
+                    m10 = td[3],
+                    m11 = td[4],
+                    m12 = td[5],
+                    m20 = td[6],
+                    m21 = td[7],
+                    m22 = td[8];
+
+                for (var dptr = 0; y < dst_height; ++y) {
+                    xs0 = m01 * y + m02,
+                        ys0 = m11 * y + m12,
+                        ws = m21 * y + m22;
+                    for (x = 0; x < dst_width; ++x, ++dptr, xs0 += m00, ys0 += m10, ws += m20) {
+                        sc = 1.0 / ws;
+                        xs = xs0 * sc, ys = ys0 * sc;
+                        ixs = xs | 0, iys = ys | 0;
+
+                        if (xs > 0 && ys > 0 && ixs < (src_width - 1) && iys < (src_height - 1)) {
+                            a = Math.max(xs - ixs, 0.0);
+                            b = Math.max(ys - iys, 0.0);
+                            off = (src_width * iys + ixs) | 0;
+
+                            p0 = src_d[off] + a * (src_d[off + 1] - src_d[off]);
+                            p1 = src_d[off + src_width] + a * (src_d[off + src_width + 1] - src_d[off + src_width]);
+
+                            dst_d[dptr] = p0 + b * (p1 - p0);
+                        } else dst_d[dptr] = fill_value;
+                    }
+                }
+            },
+            // transform is 3x3 or 2x3 matrix_t only first 6 values referenced
+            warp_affine: function(src, dst, transform, fill_value) {
+                if (typeof fill_value === "undefined") { fill_value = 0; }
+                var src_width = src.cols,
+                    src_height = src.rows,
+                    dst_width = dst.cols,
+                    dst_height = dst.rows;
+                var src_d = src.data,
+                    dst_d = dst.data;
+                var x = 0,
+                    y = 0,
+                    off = 0,
+                    ixs = 0,
+                    iys = 0,
+                    xs = 0.0,
+                    ys = 0.0,
+                    a = 0.0,
+                    b = 0.0,
+                    p0 = 0.0,
+                    p1 = 0.0;
+                var td = transform.data;
+                var m00 = td[0],
+                    m01 = td[1],
+                    m02 = td[2],
+                    m10 = td[3],
+                    m11 = td[4],
+                    m12 = td[5];
+
+                for (var dptr = 0; y < dst_height; ++y) {
+                    xs = m01 * y + m02;
+                    ys = m11 * y + m12;
+                    for (x = 0; x < dst_width; ++x, ++dptr, xs += m00, ys += m10) {
+                        ixs = xs | 0;
+                        iys = ys | 0;
+
+                        if (ixs >= 0 && iys >= 0 && ixs < (src_width - 1) && iys < (src_height - 1)) {
+                            a = xs - ixs;
+                            b = ys - iys;
+                            off = src_width * iys + ixs;
+
+                            p0 = src_d[off] + a * (src_d[off + 1] - src_d[off]);
+                            p1 = src_d[off + src_width] + a * (src_d[off + src_width + 1] - src_d[off + src_width]);
+
+                            dst_d[dptr] = p0 + b * (p1 - p0);
+                        } else dst_d[dptr] = fill_value;
+                    }
+                }
+            },
+
+            // Basic RGB Skin detection filter
+            // from http://popscan.blogspot.fr/2012/08/skin-detection-in-digital-images.html
+            skindetector: function(src, dst) {
+                var r, g, b, j;
+                var i = src.width * src.height;
+                while (i--) {
+                    j = i * 4;
+                    r = src.data[j];
+                    g = src.data[j + 1];
+                    b = src.data[j + 2];
+                    if ((r > 95) && (g > 40) && (b > 20) && (r > g) && (r > b) && (r - Math.min(g, b) > 15) && (Math.abs(r - g) > 15)) {
+                        dst[i] = 255;
+                    } else {
+                        dst[i] = 0;
+                    }
+                }
+            }
+        };
+    })();
+
+    global.imgproc = imgproc;
+
+})(jsfeat);
+
+(function(global) {
+    "use strict";
+    //
+    var haar = (function() {
+
+        var _group_func = function(r1, r2) {
+            var distance = (r1.width * 0.25 + 0.5) | 0;
+
+            return r2.x <= r1.x + distance &&
+                r2.x >= r1.x - distance &&
+                r2.y <= r1.y + distance &&
+                r2.y >= r1.y - distance &&
+                r2.width <= (r1.width * 1.5 + 0.5) | 0 &&
+                (r2.width * 1.5 + 0.5) | 0 >= r1.width;
+        }
+
+        return {
+
+            edges_density: 0.07,
+
+            detect_single_scale: function(int_sum, int_sqsum, int_tilted, int_canny_sum, width, height, scale, classifier) {
+                var win_w = (classifier.size[0] * scale) | 0,
+                    win_h = (classifier.size[1] * scale) | 0,
+                    step_x = (0.5 * scale + 1.5) | 0,
+                    step_y = step_x;
+                var i, j, k, x, y, ex = (width - win_w) | 0,
+                    ey = (height - win_h) | 0;
+                var w1 = (width + 1) | 0,
+                    edge_dens, mean, variance, std;
+                var inv_area = 1.0 / (win_w * win_h);
+                var stages, stage, trees, tree, sn, tn, fn, found = true,
+                    stage_thresh, stage_sum, tree_sum, feature, features;
+                var fi_a, fi_b, fi_c, fi_d, fw, fh;
+
+                var ii_a = 0,
+                    ii_b = win_w,
+                    ii_c = win_h * w1,
+                    ii_d = ii_c + win_w;
+                var edges_thresh = ((win_w * win_h) * 0xff * this.edges_density) | 0;
+                // if too much gradient we also can skip
+                //var edges_thresh_high = ((win_w*win_h) * 0xff * 0.3)|0;
+
+                var rects = [];
+                for (y = 0; y < ey; y += step_y) {
+                    ii_a = y * w1;
+                    for (x = 0; x < ex; x += step_x, ii_a += step_x) {
+
+                        mean = int_sum[ii_a] - int_sum[ii_a + ii_b] - int_sum[ii_a + ii_c] + int_sum[ii_a + ii_d];
+
+                        // canny prune
+                        if (int_canny_sum) {
+                            edge_dens = (int_canny_sum[ii_a] - int_canny_sum[ii_a + ii_b] - int_canny_sum[ii_a + ii_c] + int_canny_sum[ii_a + ii_d]);
+                            if (edge_dens < edges_thresh || mean < 20) {
+                                x += step_x, ii_a += step_x;
+                                continue;
+                            }
+                        }
+
+                        mean *= inv_area;
+                        variance = (int_sqsum[ii_a] - int_sqsum[ii_a + ii_b] - int_sqsum[ii_a + ii_c] + int_sqsum[ii_a + ii_d]) * inv_area - mean * mean;
+
+                        std = variance > 0. ? Math.sqrt(variance) : 1;
+
+                        stages = classifier.complexClassifiers;
+                        sn = stages.length;
+                        found = true;
+                        for (i = 0; i < sn; ++i) {
+                            stage = stages[i];
+                            stage_thresh = stage.threshold;
+                            trees = stage.simpleClassifiers;
+                            tn = trees.length;
+                            stage_sum = 0;
+                            for (j = 0; j < tn; ++j) {
+                                tree = trees[j];
+                                tree_sum = 0;
+                                features = tree.features;
+                                fn = features.length;
+                                if (tree.tilted === 1) {
+                                    for (k = 0; k < fn; ++k) {
+                                        feature = features[k];
+                                        fi_a = ~~(x + feature[0] * scale) + ~~(y + feature[1] * scale) * w1;
+                                        fw = ~~(feature[2] * scale);
+                                        fh = ~~(feature[3] * scale);
+                                        fi_b = fw * w1;
+                                        fi_c = fh * w1;
+
+                                        tree_sum += (int_tilted[fi_a] - int_tilted[fi_a + fw + fi_b] - int_tilted[fi_a - fh + fi_c] + int_tilted[fi_a + fw - fh + fi_b + fi_c]) * feature[4];
+                                    }
+                                } else {
+                                    for (k = 0; k < fn; ++k) {
+                                        feature = features[k];
+                                        fi_a = ~~(x + feature[0] * scale) + ~~(y + feature[1] * scale) * w1;
+                                        fw = ~~(feature[2] * scale);
+                                        fh = ~~(feature[3] * scale);
+                                        fi_c = fh * w1;
+
+                                        tree_sum += (int_sum[fi_a] - int_sum[fi_a + fw] - int_sum[fi_a + fi_c] + int_sum[fi_a + fi_c + fw]) * feature[4];
+                                    }
+                                }
+                                stage_sum += (tree_sum * inv_area < tree.threshold * std) ? tree.left_val : tree.right_val;
+                            }
+                            if (stage_sum < stage_thresh) {
+                                found = false;
+                                break;
+                            }
+                        }
+
+                        if (found) {
+                            rects.push({
+                                "x": x,
+                                "y": y,
+                                "width": win_w,
+                                "height": win_h,
+                                "neighbor": 1,
+                                "confidence": stage_sum
+                            });
+                            x += step_x, ii_a += step_x;
+                        }
+                    }
+                }
+                return rects;
+            },
+
+            detect_multi_scale: function(int_sum, int_sqsum, int_tilted, int_canny_sum, width, height, classifier, scale_factor, scale_min) {
+                if (typeof scale_factor === "undefined") { scale_factor = 1.2; }
+                if (typeof scale_min === "undefined") { scale_min = 1.0; }
+                var win_w = classifier.size[0];
+                var win_h = classifier.size[1];
+                var rects = [];
+                while (scale_min * win_w < width && scale_min * win_h < height) {
+                    rects = rects.concat(this.detect_single_scale(int_sum, int_sqsum, int_tilted, int_canny_sum, width, height, scale_min, classifier));
+                    scale_min *= scale_factor;
+                }
+                return rects;
+            },
+
+            // OpenCV method to group detected rectangles
+            group_rectangles: function(rects, min_neighbors) {
+                if (typeof min_neighbors === "undefined") { min_neighbors = 1; }
+                var i, j, n = rects.length;
+                var node = [];
+                for (i = 0; i < n; ++i) {
+                    node[i] = {
+                        "parent": -1,
+                        "element": rects[i],
+                        "rank": 0
+                    };
+                }
+                for (i = 0; i < n; ++i) {
+                    if (!node[i].element)
+                        continue;
+                    var root = i;
+                    while (node[root].parent != -1)
+                        root = node[root].parent;
+                    for (j = 0; j < n; ++j) {
+                        if (i != j && node[j].element && _group_func(node[i].element, node[j].element)) {
+                            var root2 = j;
+
+                            while (node[root2].parent != -1)
+                                root2 = node[root2].parent;
+
+                            if (root2 != root) {
+                                if (node[root].rank > node[root2].rank)
+                                    node[root2].parent = root;
+                                else {
+                                    node[root].parent = root2;
+                                    if (node[root].rank == node[root2].rank)
+                                        node[root2].rank++;
+                                    root = root2;
+                                }
+
+                                /* compress path from node2 to the root: */
+                                var temp, node2 = j;
+                                while (node[node2].parent != -1) {
+                                    temp = node2;
+                                    node2 = node[node2].parent;
+                                    node[temp].parent = root;
+                                }
+
+                                /* compress path from node to the root: */
+                                node2 = i;
+                                while (node[node2].parent != -1) {
+                                    temp = node2;
+                                    node2 = node[node2].parent;
+                                    node[temp].parent = root;
+                                }
+                            }
+                        }
+                    }
+                }
+                var idx_seq = [];
+                var class_idx = 0;
+                for (i = 0; i < n; i++) {
+                    j = -1;
+                    var node1 = i;
+                    if (node[node1].element) {
+                        while (node[node1].parent != -1)
+                            node1 = node[node1].parent;
+                        if (node[node1].rank >= 0)
+                            node[node1].rank = ~class_idx++;
+                        j = ~node[node1].rank;
+                    }
+                    idx_seq[i] = j;
+                }
+
+                var comps = [];
+                for (i = 0; i < class_idx + 1; ++i) {
+                    comps[i] = {
+                        "neighbors": 0,
+                        "x": 0,
+                        "y": 0,
+                        "width": 0,
+                        "height": 0,
+                        "confidence": 0
+                    };
+                }
+
+                // count number of neighbors
+                for (i = 0; i < n; ++i) {
+                    var r1 = rects[i];
+                    var idx = idx_seq[i];
+
+                    if (comps[idx].neighbors == 0)
+                        comps[idx].confidence = r1.confidence;
+
+                    ++comps[idx].neighbors;
+
+                    comps[idx].x += r1.x;
+                    comps[idx].y += r1.y;
+                    comps[idx].width += r1.width;
+                    comps[idx].height += r1.height;
+                    comps[idx].confidence = Math.max(comps[idx].confidence, r1.confidence);
+                }
+
+                var seq2 = [];
+                // calculate average bounding box
+                for (i = 0; i < class_idx; ++i) {
+                    n = comps[i].neighbors;
+                    if (n >= min_neighbors)
+                        seq2.push({
+                            "x": (comps[i].x * 2 + n) / (2 * n),
+                            "y": (comps[i].y * 2 + n) / (2 * n),
+                            "width": (comps[i].width * 2 + n) / (2 * n),
+                            "height": (comps[i].height * 2 + n) / (2 * n),
+                            "neighbors": comps[i].neighbors,
+                            "confidence": comps[i].confidence
+                        });
+                }
+
+                var result_seq = [];
+                n = seq2.length;
+                // filter out small face rectangles inside large face rectangles
+                for (i = 0; i < n; ++i) {
+                    var r1 = seq2[i];
+                    var flag = true;
+                    for (j = 0; j < n; ++j) {
+                        var r2 = seq2[j];
+                        var distance = (r2.width * 0.25 + 0.5) | 0;
+
+                        if (i != j &&
+                            r1.x >= r2.x - distance &&
+                            r1.y >= r2.y - distance &&
+                            r1.x + r1.width <= r2.x + r2.width + distance &&
+                            r1.y + r1.height <= r2.y + r2.height + distance &&
+                            (r2.neighbors > Math.max(3, r1.neighbors) || r1.neighbors < 3)) {
+                            flag = false;
+                            break;
+                        }
+                    }
+
+                    if (flag)
+                        result_seq.push(r1);
+                }
+                return result_seq;
+            }
+        };
+
+    })();
+
+    global.haar = haar;
+
+})(jsfeat);
+
+/**
  * this cascade is derived from https://github.com/mtschirs/js-objectdetect implementation
  * @author Martin Tschirsich / http://www.tu-darmstadt.de/~m_t
  */

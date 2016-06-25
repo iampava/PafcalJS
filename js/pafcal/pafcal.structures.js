@@ -20,43 +20,6 @@ function Rectangle(point, width, height) {
     }
 }
 
-function Queue() {
-    this.size = 0;
-    this.first = {};
-    this.last = this.first;
-
-    this.push = function(element) {
-        var llast = this.last;
-        this.last = { value: element, next: null };
-        llast.next = this.last;
-        this.size++;
-    }
-
-    this.pushArray = function(array) {
-        var _this = this;
-        array.forEach(function(element) {
-            _this.push(element);
-        })
-    }
-
-    this.pop = function() {
-        if (this.size === 0) {
-            throw new Error("Queue is empty!");
-        }
-        var value = this.first.next.value;
-
-        if (this.size === 1) {
-            this.first = {};
-            this.last = this.first;
-        } else {
-            this.first.next = this.first.next.next;
-        }
-        this.size--;
-
-        return value;
-    }
-}
-
 function Stack() {
     this.size = 0;
     this.topElement = { value: null, next: null };
@@ -81,28 +44,6 @@ function Stack() {
     }
 }
 
-function Filter(size, data) {
-    if (this.size % 2 === 0) {
-        throw new Error("Filter must be odd in size!");
-    }
-    this.size = size;
-    this.data = data;
-}
-
-function BinaryImage(m, n) {
-    this.n = n;
-    this.m = m;
-    this.data = [];
-    for (var temp = 0; temp < n; temp++) {
-        this.data.push([]);
-    }
-    this.fits = function(point) {
-        if (point.x < 0 || point.x >= m) return false;
-        if (point.y < 0 || point.y >= n) return false;
-        return true;
-    }
-
-}
 //CSR method
 function SparseBinaryImage(rows) {
     this.size = 0;
@@ -124,7 +65,6 @@ function SparseBinaryImage(rows) {
         this.row[row + 1] = this.size;
 
     }
-
 
     this.getIndexBasedOnPoint = function(point) {
         var rowOffset = this.row[point.y],
@@ -161,30 +101,6 @@ function SparseBinaryImage(rows) {
         }
         throw new Error("Can't find point!");
     }
-
-
-    this.getNeighboursByIndex = function(index, testFunction) {
-        var point = this.getPointBasedOnIndex(index),
-            result = [],
-            neighbours = [];
-
-        // neighbours.push(new Point(point.x - 1, point.y - 1));
-        neighbours.push(new Point(point.x, point.y - 1));
-        // neighbours.push(new Point(point.x + 1, point.y - 1));
-        neighbours.push(new Point(point.x - 1, point.y));
-
-        neighbours.push(new Point(point.x + 1, point.y));
-        // neighbours.push(new Point(point.x - 1, point.y + 1));
-        neighbours.push(new Point(point.x, point.y + 1));
-        // neighbours.push(new Point(point.x + 1, point.y + 1));
-
-        for (var i = 0; i < neighbours.length; i++) {
-            var found = this.getIndexBasedOnPoint(neighbours[i])
-            if (found && testFunction(found)) result.push(found);
-        }
-        return result;
-    }
-
 }
 
 function BinaryLookupTable(width, height) {
@@ -235,13 +151,6 @@ function HSVPixel(hue, saturation, value) {
     this.v = value;
 }
 
-function MorphoElement(size, matrix) {
-    if (size % 2 === 0) {
-        throw new Error("You cannot have an even structuring element!");
-    }
-    this.size = size;
-    this.data = matrix;
-}
 
 function FullMorphoElement(size) {
     if (size % 2 === 0) {

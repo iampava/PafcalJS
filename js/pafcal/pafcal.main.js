@@ -18,7 +18,10 @@ pafcal.constants = {
     BACKGROUND_FRAMES: 15,
     TRACKER_SIZE: 30,
     BACKGROUND_SUBSTRACTION_SETTING: true,
-    BACKGROUND_COLOR: '#C0C0C0'
+    BACKGROUND_COLOR: '#C0C0C0',
+    MOVE_COLOR: '#00CC66',
+    CLICK_COLOR: '#0080FF',
+    MISS_COLOR: '#FF8000',
 };
 
 if (window.Worker) {
@@ -75,7 +78,7 @@ if (window.Worker) {
         tracker.style.bottom = null;
     };
 
-    pafcal.miss = function(color) {
+    pafcal.miss = function() {
         var tracker = document.getElementById("PAFCAL_TRACKER");
         tracker.style.display = "initial";
         tracker.style.background = color;
@@ -88,20 +91,17 @@ if (window.Worker) {
     pafcal.setUpCommunications = function(e) {
         switch (e.data.type) {
 
-            case 'COLOR_TEST':
-                // var canvas = document.getElementById("resultCanvas");
-                // var ctx = canvas.getContext('2d');
-                // var imageData = ctx.createImageData(pafcal.constants.WIDTH, pafcal.constants.HEIGHT);
-                // for (var i = 0; i < e.data.data.col.length; i++) {
-                //     var point = _getPointBasedOnIndex(i, e.data.data),
-                //         index = (point.y * pafcal.constants.WIDTH + point.x) * 4;
-                //     imageData.data[index + 3] = 255;
-                //     imageData.data[index + 1] = 255;
-                // }
-                // ctx.putImageData(imageData, 0, 0);
+            case 'FACE':
+                var videoCanvas = document.getElementById("videoCanvas");
+                var ctx = videoCanvas.getContext("2d");
+                var rect = e.data.data;
 
-                // var videoCanvas = document.getElementById("videoCanvas");
-                // videoCanvas.getContext('2d').drawImage(pafcal.video, 0, 0, pafcal.constants.WIDTH, pafcal.constants.HEIGHT);
+                ctx.beginPath();
+                ctx.lineWidth = "6";
+                ctx.strokeStyle = "red";
+                ctx.rect(rect.x, rect.y, rect.width, rect.height);
+                ctx.stroke();
+
                 break;
             case 'CONVEX_HULL':
                 break;
@@ -135,7 +135,7 @@ if (window.Worker) {
                 _sendImage('IMAGE', worker);
                 break;
             case 'MOVE':
-                pafcal.showTracker(e.data.data.point, e.data.data.color);
+                pafcal.showTracker(e.data.data.point, pafcal.constants.MOVE_COLOR);
                 break;
                 var canvas = document.getElementById("resultCanvas");
                 var ctx = canvas.getContext('2d');
@@ -162,43 +162,14 @@ if (window.Worker) {
 
                 break;
             case 'CLICK':
-                pafcal.showTracker(e.data.data.point, e.data.data.color);
+                pafcal.showTracker(e.data.data.point);
                 var widthRatio = (document.documentElement.clientWidth - 80) / pafcal.constants.WIDTH,
                     heightRatio = (document.documentElement.clientHeight - 50) / pafcal.constants.HEIGHT,
                     trackerX = (e.data.data.point.x - pafcal.constants.TRACKER_SIZE / 2) * widthRatio,
                     trackerY = (e.data.data.point.y - pafcal.constants.TRACKER_SIZE / 2) * heightRatio;
                 pafcal.click({ x: trackerX, y: trackerY });
-                break;
-                var canvas = document.getElementById("resultCanvas");
-                var ctx = canvas.getContext('2d');
-                var qwer = ctx.createImageData(pafcal.constants.WIDTH, pafcal.constants.HEIGHT);
-                for (var i = 0; i < e.data.data.image.size; i++) {
-                    var point = _getPointBasedOnIndex(i, e.data.data.image),
-                        index = (point.y * pafcal.constants.WIDTH + point.x) * 4;
-                    qwer.data[index + 3] = 255;
-                    qwer.data[index + 1] = 255;
-                }
-                ctx.putImageData(qwer, 0, 0);
-
-                var points = e.data.data.convexHull;
-                ctx.beginPath();
-                ctx.lineWidth = "6";
-                ctx.strokeStyle = "red";
-                ctx.moveTo(points[0].x, points[0].y);
-
-                for (var i = 1; i < points.length; i++) {
-                    ctx.lineTo(points[i].x, points[i].y);
-                }
-                ctx.closePath();
-                ctx.stroke();
-                break;
             case 'MISS':
-                pafcal.miss(e.data.data);
-                break;
-                var canvas = document.getElementById("resultCanvas");
-                var ctx = canvas.getContext('2d');
-                var qwer = ctx.createImageData(pafcal.constants.WIDTH, pafcal.constants.HEIGHT);
-                ctx.putImageData(qwer, 0, 0);
+                pafcal.miss(pafcal.constants.MISS_COLOR);
                 break;
             default:
                 break;
@@ -344,26 +315,6 @@ function _sendImage(type, worker, extra) {
         default:
             break;
     }
-};
-
-function _getBestRect(rects, scale) {
-    var length = rects.length,
-        max = -Infinity,
-        best = undefined;
-
-    if (length === 0) return null;
-    for (var i = 0; i < length; i++) {
-        if (rects[i].confidence > max) {
-            max = rects[i].confidence;
-            best = rects[i];
-        }
-    }
-
-    // var rect = new Rectangle(new Point(best.x * scale | 0, best.y * scale | 0), best.width * scale | 0, best.height * scale | 0);
-
-    // postMessage({ type: 'FACE', data: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } });
-
-    return new Rectangle(new Point(best.x * scale | 0, best.y * scale | 0), best.width * scale | 0, best.height * scale | 0);
 };
 
 function _getPointBasedOnIndex(index, sparseImage) {
