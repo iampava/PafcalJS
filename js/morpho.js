@@ -17,17 +17,17 @@ function erosion(element, binaryImage, lookupTable) {
     return resultImage;
 }
 
-function dilation(element, binaryImage, lookupTable) {
-    var resultImage = new BinaryImage(binaryImage.m, binaryImage.n),
+function dilation(width, height, element, sparseImage, lookupTable) {
+    var resultImage = new SparseBinaryImage(sparseImage.rowCount),
+        binaryLookupTable = new BinaryLookupTable(width, height),
         tempSize = Math.floor(element.size / 2);
 
-    for (var i = tempSize; i < binaryImage.n - tempSize - 1; i++) {
-        for (var j = tempSize; j < binaryImage.m - tempSize - 1; j++) {
+
+    for (var i = tempSize; i < height - tempSize - 1; i++) {
+        for (var j = tempSize; j < width - tempSize - 1; j++) {
             var sum = getAreaValue(new Point(j - tempSize, i - tempSize), new Point(j + tempSize, i + tempSize), lookupTable);
             if (sum > 0) {
-                resultImage.data[i].push(1);
-            } else {
-                resultImage.data[i].push(0);
+                resultImage.add(i, j);
             }
         }
     }
@@ -145,73 +145,64 @@ function deleteConectedComponents(width, height, sparseImage, sizeThreshold) {
     return resultSparseImage;
 }
 
-function sequantialDeleteConectedComponents(width, height, sparseImage, sizeThreshold) {
-    var indexLabel = [],
+function sequantialDeleteConectedComponents(sparseImage, sizeThreshold) {
+   var indexLabel = [],
         labels = [],
         labelMap = [],
-        l = 1,
-        binaryImage = new BinaryImage(width, height),
-        topPoint = new Point(width, height),
-        leftPoint = new Point(width, height),
-        bottomPoint = new Point(0, 0),
-        rightPoint = new Point(0, 0);
-
-
+        resultImage = new SparseBinaryImage(sparseImage.rowCount),
+        l = 1;
 
     for (var i = 0; i < sparseImage.size; i++) {
         var currentPoint = sparseImage.getPointBasedOnIndex(i),
             top = indexLabel[sparseImage.getIndexBasedOnPoint(new Point(currentPoint.x, currentPoint.y - 1))],
             left = indexLabel[sparseImage.getIndexBasedOnPoint(new Point(currentPoint.x - 1, currentPoint.y))];
 
-        if (top > 0 && (left === undefined || top === left)) {
-            indexLabel[i] = top;
-            labels[top].push(currentPoint);
-            continue;
-        }
-        if (left > 0 && top === undefined) {
-            indexLabel[i] = left;
-            labels[left].push(currentPoint);
-            continue;
-        }
         if (left === undefined && top === undefined) {
-            labels[l] = [];
+            labels[l] = 1;
             labelMap[l] = [];
-            labels[l].push(currentPoint);
             indexLabel[i] = l;
             l++;
             continue;
         }
 
-        if (top !== left) {
-            labels[top].push(currentPoint);
+        if (top > 0 && (left === undefined || top === left)) {
+            labels[top]++;
             indexLabel[i] = top;
-            labelMap[top].push(left);
-            labelMap[left].push(top);
+            continue;
+        }
+
+        if (left > 0 && top === undefined) {
+            labels[left]++;
+            indexLabel[i] = left;
+            continue;
+        }
+
+        if (top !== left) {
+            labels[top]++;
+            indexLabel[i] = top;
+            if (labelMap[top].indexOf(left) === -1) labelMap[top].push(left);
+            if (labelMap[left].indexOf(top) === -1) labelMap[left].push(top);
             continue;
         }
     }
-    labels.forEach(function(arr, index) {
-        if (arr.length >= sizeThreshold) {
-            arr.forEach(function(point) {
-                binaryImage.data[point.y][point.x] = 1;
-            });
-        } else {
-            var sum = arr.length;
-            labelMap[index].some(function(mapIndex) {
-                sum += labels[mapIndex].length;
-                if (sum >= sizeThreshold) {
-                    arr.forEach(function(point) {
-                        binaryImage.data[point.y][point.x] = 1;
-                    });
-                    return true;
-                }
-            })
 
+    for (var i = 0; i < sparseImage.size; i++) {
+        var sum = labels[indexLabel[i]];
+        if (sum >= sizeThreshold) {
+            var point = sparseImage.getPointBasedOnIndex(i);
+            resultImage.add(point.y, point.x);
+            continue;
         }
-
-    });
-
-    return { binary: binaryImage };
+        labelMap[indexLabel[i]].some(function(mapIndex) {
+            sum += labels[mapIndex];
+            if (sum >= sizeThreshold) {
+                var point = sparseImage.getPointBasedOnIndex(i);
+                resultImage.add(point.y, point.x);
+                return true;
+            }
+        })
+    }
+    return resultImage;
 }
 
 function convexHull(binaryImage) {

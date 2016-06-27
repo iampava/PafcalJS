@@ -5,8 +5,7 @@ function addNumber(number, event) {
 
 function clientStart() {
     var configObject = {
-        BACKGROUND_SUBSTRACTION_SETTING: false,
-        WORKER_PATH: "js/pafcal/pafcal.worker.js"
+        BACKGROUND_SUBSTRACTION_SETTING: false
     };
     pafcal.configure(configObject);
     pafcal.start();

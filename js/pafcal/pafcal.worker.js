@@ -9,7 +9,7 @@ pafcal.constants = {
     BACKGROUND_FRAMES: 15,
     SIZE_THRESHOLD: 200,
     ADAPTIVE_SIZE: {
-        WIDTH: 50,
+        WIDTH: 150,
         HEIGHT: 100
     },
     HSV_THRESHOLD: {
@@ -32,6 +32,7 @@ pafcal.constants = {
 
     BACKGROUND_SUBSTRACTION_SETTING: true,
     BACKGROUND_SUBSTRACTION_DECISION: null,
+    COMPLETE_INFO: true,
     BACKGROUND_DATA: [],
 
     JS_FEAT: {
@@ -46,6 +47,10 @@ pafcal.constants = {
         MAX_WORK_SIZE: 160
     },
 };
+pafcal._frameInfo = {
+    FRAME_NUMBER: 0
+};
+
 var _diffPixels = 0,
     _center = null,
     _state = 'MISS';
@@ -57,6 +62,12 @@ pafcal.configure = function(object) {
         }
     }
 };
+
+pafcal.showFrameInfo = function() {
+    console.log(pafcal._frameInfo);
+    pafcal._frameInfo = { FRAME_NUMBER: pafcal._frameInfo.FRAME_NUMBER + 1 };
+
+}
 
 pafcal.modelBackground = function(imageData, count) {
     var backgroundData = pafcal.constants.BACKGROUND_DATA;
@@ -76,6 +87,22 @@ pafcal.modelBackground = function(imageData, count) {
         pafcal.constants.BACKGROUND_SUBSTRACTION_DECISION = false;
     }
 };
+
+pafcal.createBackgroundReference = function(image, count) {
+    var temp = new Uint8ClampedArray(pafcal.constants.WIDTH * pafcal.constants.HEIGHT * 4);
+    pafcal.modelBackground(image, count);
+    for (var i = 0; i < pafcal.constants.BACKGROUND_DATA.length; i++) {
+        temp[i] = pafcal.constants.BACKGROUND_DATA[i] / pafcal.constants.BACKGROUND_FRAMES;
+    }
+    pafcal.constants.BACKGROUND_DATA = temp;
+    if (pafcal.constants.BACKGROUND_SUBSTRACTION_DECISION === null) {
+        pafcal.constants.BACKGROUND_SUBSTRACTION_DECISION = true;
+    } else {
+        console.log("BACKGROUND_EXTRACTION: DROPPED");
+    }
+
+    postMessage({ type: 'IMAGE', data: null });
+}
 pafcal.step = function(image, haarData) {
     var faceResult = null,
         filterResult = null,
@@ -88,45 +115,58 @@ pafcal.step = function(image, haarData) {
         height = pafcal.constants.HEIGHT,
         optimizedData = null,
         topLeft = new Point(0, 0);
+    if (self._center) {
+        var botRight = new Point(Math.min(self._center.x + (pafcal.constants.ADAPTIVE_SIZE.WIDTH * 1.5), pafcal.constants.WIDTH), Math.min(self._center.y + (pafcal.constants.ADAPTIVE_SIZE.HEIGHT * 1.5), pafcal.constants.HEIGHT));
+        topLeft = new Point(Math.max(self._center.x - (pafcal.constants.ADAPTIVE_SIZE.WIDTH * 1.5), 0), Math.max(self._center.y - (pafcal.constants.ADAPTIVE_SIZE.HEIGHT * 1.5), 0));
 
-    if (_center) {
-        var botRight = new Point(Math.min(_center.x + (pafcal.ADAPTIVE_SIZE.WIDTH * 1.5), 0), Math.min(_center.y + (pafcal.ADAPTIVE_SIZE.HEIGHT * 1.5), 0));
-        topLeft = new Point(Math.max(_center.x - (pafcal.ADAPTIVE_SIZE.WIDTH * 1.5), 0), Math.max(_center.y - (pafcal.ADAPTIVE_SIZE.HEIGHT * 1.5), 0));
+        topLeft.x = Math.floor(topLeft.x);
+        topLeft.y = Math.floor(topLeft.y);
+        botRight.x = Math.floor(botRight.x);
+        botRight.y = Math.floor(botRight.y);
+
         width = botRight.x - topLeft.x + 1;
         height = botRight.y - topLeft.y + 1;
+        if (width === 0 || height === 0) {
+            self._center = null;
+            pafcal.step(image, haarData);
+        }
         optimizedData = new ImageData(width, height);
-
-        for (var i = topLeft.y; i <= botRight.y; i++4) {
+        for (var i = topLeft.y; i <= botRight.y; i++) {
             for (var j = topLeft.x; j <= botRight.x; j++) {
-                optimizedData.data.push(imageData.data[(i * pafcal.WIDTH + j) * 4]);
+                optimizedData.data[((i - topLeft.y) * width + (j - topLeft.x)) * 4] = image.data[(i * pafcal.constants.WIDTH + j) * 4];
+                optimizedData.data[((i - topLeft.y) * width + (j - topLeft.x)) * 4 + 1] = image.data[(i * pafcal.constants.WIDTH + j) * 4 + 1];
+                optimizedData.data[((i - topLeft.y) * width + (j - topLeft.x)) * 4 + 2] = image.data[(i * pafcal.constants.WIDTH + j) * 4 + 2];
+                optimizedData.data[((i - topLeft.y) * width + (j - topLeft.x)) * 4 + 3] = image.data[(i * pafcal.constants.WIDTH + j) * 4 + 3];
             }
         }
     } else {
         optimizedData = image;
     }
 
-
     faceResult = pafcal.faceDetection(haarWidth, haarHeight, haarData, pafcal.constants.JS_FEAT.CLASSIFIER, pafcal.constants.JS_FEAT.OPTONS);
     filterResult = pafcal.filter(width, height, topLeft, optimizedData, faceResult);
-    morphoResult = pafcal.morpho(width, height, filterResult.sparse, filterResult.table);
-
-    deleteResult = pafcal.delete(morphoResult, pafcal.constants.SIZE_THRESHOLD);
-
+    // morphoResult = pafcal.morpho(width, height, filterResult.sparse, filterResult.table);
+    deleteResult = pafcal.delete(filterResult.sparse, pafcal.constants.SIZE_THRESHOLD);
+    pafcal._frameInfo.SURFACE_OPTIMIZATION_SUCCESS = true;
     if (deleteResult.size === 0) {
-        if (_center) {
-            _center = null;
-            pafcal.step(imageData, haarData)
+        if (self._center) {
+            self._center = null;
+            pafcal._frameInfo.SURFACE_OPTIMIZATION_SUCCESS = false;
+            pafcal.step(image, haarData)
         } else {
-            _state = 'MISS';
+            self._state = 'MISS';
+            pafcal._frameInfo.DETECTION_STATUS = "NONE";
             postMessage({ type: 'MISS', data: null });
         }
-        return;
     } else {
-        var convexHull = pafcal.convexHull(deleteResult),
-            _center = pafcal.centroid(convexHull);
-        pafcal.decide(_center, convexHull, deleteResult);
+        var convexHull = pafcal.convexHull(deleteResult);
+        var center = pafcal.centroid(convexHull);
+        self._center = pafcal.centroid(convexHull);
+        pafcal.decide(center, convexHull, topLeft);
+        postMessage({ type: 'BINARY_DATA', data: { offset: topLeft, image: { size: deleteResult.size, rowCount: deleteResult.rowCount, row: deleteResult.row, col: deleteResult.col }, center: self._center } });
     }
     postMessage({ type: 'IMAGE', data: null });
+
 };
 
 pafcal.faceDetection = function(w, h, image, classifier, options) {
@@ -146,15 +186,14 @@ pafcal.faceDetection = function(w, h, image, classifier, options) {
 
     jsfeat.imgproc.compute_integral_image(img_u8, ii_sum, ii_sqsum, classifier.tilted ? ii_tilted : null);
     jsfeat.haar.edges_density = options.edges_density;
-    var rects = jsfeat.haar.detect_multi_scale(ii_sum, ii_sqsum, ii_tilted, options.use_canny ? ii_canny : null, img_u8.cols, img_u8.rows, classifier, options.scale_factor, options.min_scale);
+    rects = jsfeat.haar.detect_multi_scale(ii_sum, ii_sqsum, ii_tilted, options.use_canny ? ii_canny : null, img_u8.cols, img_u8.rows, classifier, options.scale_factor, options.min_scale);
     rects = jsfeat.haar.group_rectangles(rects, 1);
-
 
     return _getBestRect(rects, pafcal.constants.WIDTH / img_u8.cols);
 };
 
 
-pafcal.filter = function(width, height, image, offset, faceRect) {
+pafcal.filter = function(width, height, offset, image, faceRect) {
     var sparseImage = new SparseBinaryImage(height),
         binaryLookupTable = new BinaryLookupTable(width, height),
         background = pafcal.constants.BACKGROUND_DATA,
@@ -178,7 +217,6 @@ pafcal.filter = function(width, height, image, offset, faceRect) {
         }
         binaryLookupTable.data[rowIndex].push(_computeBinaryLookupValue(rowIndex, colIndex, logic, binaryLookupTable));
     }
-    // postMessage({ type: 'COLOR_TEST', data: { row: sparseImage.row, col: sparseImage.col, size: sparseImage.size, rowCount: sparseImage.rowCount } });
     return { sparse: sparseImage, table: binaryLookupTable };
 };
 
@@ -187,6 +225,7 @@ pafcal.morpho = function(width, height, sparseImage, lookupTable) {
         dilationResult = null;
 
     dilationResult = _dilation(width, height, morphoElement, sparseImage, lookupTable);
+    return dilationResult;
 };
 
 pafcal.delete = function(sparseImage, sizeThreshold) {
@@ -330,7 +369,7 @@ pafcal.centroid = function(convexHull) {
         signedArea = 0,
         temp = undefined;
 
-    if (convexHull.length === 0) return null;
+    if (convexHull.length < 3) return null;
     for (var i = 0; i < convexHull.length - 2; i++) {
         temp = convexHull[i].x * convexHull[i + 1].y - convexHull[i + 1].x * convexHull[i].y;
         cx += (convexHull[i].x + convexHull[i + 1].x) * temp;
@@ -349,26 +388,34 @@ pafcal.centroid = function(convexHull) {
     return new Point(cx, cy);
 };
 
-pafcal.decide = function(center, convexHull, deleteResult) {
+pafcal.decide = function(center, convexHull, offset) {
     var minDist = Infinity,
         maxDist = -Infinity;
-
+    if (center === null) {
+        pafcal._frameInfo.DETECTION_STATUS = "NONE";
+        postMessage({ type: 'MISS', data: null });
+        return;
+    }
     for (var i = 0; i < convexHull.length; i++) {
         var dist = _pointDist(center, convexHull[i]);
         if (dist < minDist) minDist = dist;
         if (dist > maxDist) maxDist = dist;
     }
-
     if (maxDist <= 2 * minDist) {
-        _state = 'MOVE';
-        postMessage({ type: 'MOVE', data: null })
+        self._state = 'MOVE';
+        pafcal._frameInfo.DETECTION_STATUS = "FREE_HAND";
+        postMessage({ type: 'MOVE', data: new Point(center.x + offset.x, center.y + offset.y) })
     } else {
-        if (_state !== 'CLICK') {
+        if (self._state !== 'CLICK') {
+            self._state = 'CLICK';
+            pafcal._frameInfo.DETECTION_STATUS = "CLOSED_HAND";
             postMessage({ type: 'CLICK', data: new Point(center.x + offset.x, center.y + offset.y) });
         } else {
             postMessage({ type: 'SECOND_CLICK', data: new Point(center.x + offset.x, center.y + offset.y) });
         }
     };
+    pafcal._frameInfo.CENTER_POINT = center;
+
 }
 
 function _getBestRect(rects, scale) {
@@ -550,26 +597,22 @@ onmessage = function(e) {
             pafcal.configure(e.data.data);
             break;
         case 'IMAGE':
+
+            var start = (new Date).getTime();
+
             pafcal.step(e.data.data.image, e.data.data.jsfeat);
+            var diff = (new Date).getTime() - start;
+
+            if (pafcal.constants.COMPLETE_INFO) {
+                pafcal._frameInfo.DETECTION_TIME_MILISECONDS = diff;
+                pafcal.showFrameInfo();
+            }
             break;
         case 'BACKGROUND_IMAGE':
             pafcal.modelBackground(e.data.data.image, e.data.data.count);
             break;
         case 'FINAL_BACKGROUND_IMAGE':
-            var temp = new Uint8ClampedArray(pafcal.constants.WIDTH * pafcal.constants.HEIGHT * 4);
-            pafcal.modelBackground(e.data.data.image, e.data.data.count);
-            for (var i = 0; i < pafcal.constants.BACKGROUND_DATA.length; i++) {
-                temp[i] = pafcal.constants.BACKGROUND_DATA[i] / pafcal.constants.BACKGROUND_FRAMES;
-            }
-            pafcal.constants.BACKGROUND_DATA = temp;
-            if (pafcal.constants.BACKGROUND_SUBSTRACTION_DECISION === null) {
-                pafcal.constants.BACKGROUND_SUBSTRACTION_DECISION = true;
-                console.log("YES!");
-            } else {
-                console.log(pafcal.constants.BACKGROUND_SUBSTRACTION_DECISION);
-                console.log("NO!");
-            }
-            postMessage({ type: 'IMAGE', data: null });
+            pafcal.createBackgroundReference(e.data.data.image, e.data.data.count);
             break;
         default:
             break;

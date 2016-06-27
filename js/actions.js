@@ -84,7 +84,6 @@ function extractSkin(width, height, image) {
 
 function backgroundAndSkinDetection(width, height, background, image, faceRect) {
     var sparseImage = new SparseBinaryImage(height),
-        binaryImage = new BinaryImage(width, height),
         binaryLookupTable = new BinaryLookupTable(width, height);
     length = image.data.length;
     for (var i = 0; i < length; i += 4) {
@@ -93,21 +92,20 @@ function backgroundAndSkinDetection(width, height, background, image, faceRect) 
             rowIndex = Math.floor((i / 4) / width),
             colIndex = Math.floor((i / 4) % width);
         if (!faceRect) {
-            logic = rgbSkinDetection(imagePixel) && hsvSkinDetection(rgbToHsv(imagePixel));
+            logic = _backgroundThreshold(20, backgroundPixel, imagePixel) && rgbSkinDetection(imagePixel) && hsvSkinDetection(rgbToHsv(imagePixel));
         } else {
             faceRect.y -= height / 2;
             faceRect.height *= 2;
-            logic = !faceRect.contains(new Point(colIndex, rowIndex)) && rgbSkinDetection(imagePixel) && hsvSkinDetection(rgbToHsv(imagePixel));
+            logic = !faceRect.contains(new Point(colIndex, rowIndex)) && _backgroundThreshold(20, backgroundPixel, imagePixel) && rgbSkinDetection(imagePixel) && hsvSkinDetection(rgbToHsv(imagePixel));
         }
 
         if (logic) {
             sparseImage.add(rowIndex, colIndex);
-            binaryImage.data[rowIndex][colIndex] = 1;
 
         }
-        // binaryLookupTable.data[rowIndex].push(computeBinaryLookupValue(rowIndex, binaryImage.data[rowIndex].length - 1, logic, binaryLookupTable));
+        binaryLookupTable.data[rowIndex].push(computeBinaryLookupValue(rowIndex, colIndex, logic, binaryLookupTable));
     }
-    return { sparse: sparseImage, binary: binaryImage, table: binaryLookupTable };
+    return { sparse: sparseImage, table: binaryLookupTable};
 }
 
 /*function rbGaussianModel(width, height, image, context) {
@@ -370,7 +368,7 @@ function filterStep(width, imageData, index, filter) {
 function setUp(width, height) {
     // testDrawImage();
     return;
-    
+
     setUpTracker();
     var video = document.createElement('video');
 
@@ -401,3 +399,6 @@ function capture() {
     // document.write('<img src="' + img + '"/>');
     window.location = canvas.toDataURL("image/png");
 }
+
+
+/////////////////////////////

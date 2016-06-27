@@ -7,9 +7,10 @@
 </head>
 
 <body onload='clientStart()'>
-    <!-- <canvas id="resultCanvas" width="640" height="480"></canvas> -->
+ <body onload='testStep4()'>
+    <canvas id="resultCanvas" width="640" height="480" style="position: fixed; bottom: 0; right:0;"></canvas>
     <canvas id="videoCanvas" width="640" height="480" style="position: fixed; top: 0; right:0;"></canvas>
-    <!-- <canvas id="thirdCanvas" width="640" height="480"></canvas> -->
+    <!-- <canvas id="backCanvas" width="640" height="480"></canvas> -->
     <div class="calculator">
         <div class="result">
             <p id="result">
@@ -34,16 +35,26 @@
             <div class="full-row">
                 <button type="button" onclick="addNumber(0)">0</button>
             </div>
-            <div class="row">
+            <!-- <div class="row">
                 <button type="button" onclick="addNumber('+')"> + </button>
                 <button type="button" onclick="addNumber('-')"> -</button>
                 <button type="button" onclick="addNumber('=')"> =</button>
-            </div>
+            </div> -->
         </div>
     </div>
     <script type="text/javascript" src="js/pafcal/pafcal.structures.js"></script>
     <script type="text/javascript" src="js/pafcal/pafcal.main.js"></script>
     <script type="text/javascript" src="js/client.js"></script>
+    <!-- <script type="text/javascript" src="js/constants.js"></script>
+    <script type="text/javascript" src="js/constructors.js"></script>
+    <script type="text/javascript" src="js/conversions.js"></script>
+    <script type="text/javascript" src="js/libraries/jsfeat/jsfeat.js"></script>
+    <script type="text/javascript" src="js/libraries/jsfeat/frontalface.js"></script>
+    <script type="text/javascript" src="js/jsfeat-middleware.js"></script>
+    <script type="text/javascript" src="js/helpers.js"></script>
+    <script type="text/javascript" src="js/morpho.js"></script>
+    <script type="text/javascript" src="js/actions.js"></script>
+    <script type="text/javascript" src="js/tests.js"></script> -->
 </body>
 
 </html>

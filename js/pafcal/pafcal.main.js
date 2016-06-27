@@ -4,7 +4,6 @@ pafcal.canvas = document.createElement("canvas");
 pafcal.tempCanvas = document.createElement("canvas");
 
 pafcal.constants = {
-    WORKER_PATH: null,
     WIDTH: 640,
     HEIGHT: 480,
     MOVE_COLOR: '#00CC66',
@@ -26,18 +25,34 @@ pafcal.constants = {
     }
 };
 
+var _videoStream = null;
+var _start = undefined;
+var _initialTime = undefined;
+var _totalTime = 0;
+pafcal._finalInfo = {
+    TOTAL_TIME_SECONDS: null,
+    TOTAL_FRAMES_CAPTURED: 0,
+    TOTAL_HANDS_DETECTED: 0,
+    DETECTION_TIME_MILISECONDS: null,
+    TOTAL_CLICKS: 0
+}
+
 if (window.Worker) {
-    var worker = new Worker(pafcal.constants.WORKER_PATH);
+    var worker = new Worker("js/pafcal/pafcal.worker.js");
 
     pafcal.start = function(configuration) {
+        window._initialTime = new Date().getTime();
         _setUpCanvas();
         _setUpTracker();
         _setUpBackgroundFeedback();
         _setUpRecording(worker);
+        window._start = !pafcal.constants.BACKGROUND_SUBSTRACTION_SETTING;
+        console.log("BACKGROUND_EXTRACTION", (pafcal.constants.BACKGROUND_SUBSTRACTION_SETTING) ? "ON" : "OFF");
 
         if (pafcal.constants.BACKGROUND_SUBSTRACTION_SETTING === true) {
             _startCountdown(worker);
         } else {
+            _setUpControlEvents();
             _sendImage('IMAGE', worker);
         }
     };
@@ -51,15 +66,33 @@ if (window.Worker) {
         worker.postMessage({ type: 'CONFIG', data: object });
     };
 
+    pafcal.stop = function() {
+        var videoTrack = _videoStream.getTracks()[0];
+        videoTrack.stop();
+        _videoStream.removeTrack(videoTrack);
+        worker.terminate();
+
+        pafcal._finalInfo.TOTAL_TIME_SECONDS = (new Date().getTime() - window._initialTime) / 1000;
+        pafcal._finalInfo.DETECTION_TIME_MILISECONDS = window._totalTime / pafcal._finalInfo.TOTAL_HANDS_DETECTED;
+        console.log(pafcal._finalInfo);
+    }
+
+    pafcal.pause = function() {
+        window._start = !window._start;
+        if (window._start === true) {
+            _sendImage('IMAGE', worker);
+        }
+    }
+
     pafcal.click = function(point) {
         var event = document.createEvent("MouseEvent");
         event.initMouseEvent(
             "click",
             true, true,
             window, null,
-            point.x, point.y, 0, 0, 
-            false, false, false, false, 
-            0  , null
+            point.x, point.y, 0, 0,
+            false, false, false, false,
+            0, null
         );
         var topElement = document.elementFromPoint(point.x, point.y);
         topElement.dispatchEvent(event);
@@ -67,10 +100,14 @@ if (window.Worker) {
 
     pafcal.showTracker = function(point, state) {
         var tracker = document.getElementById("PAFCAL_TRACKER"),
-            widthRatio = (document.documentElement.clientWidth - 80) / pafcal.constants.WIDTH,
-            heightRatio = (document.documentElement.clientHeight - 50) / pafcal.constants.HEIGHT,
-            trackerX = (point.x - pafcal.constants.TRACKER_SIZE / 2) * widthRatio,
-            trackerY = (point.y - pafcal.constants.TRACKER_SIZE / 2) * heightRatio;
+            widthRatio = (document.documentElement.clientWidth - 100) / pafcal.constants.WIDTH,
+            heightRatio = (document.documentElement.clientHeight + 200) / pafcal.constants.HEIGHT,
+            tempX = point.x - pafcal.constants.TRACKER_SIZE / 2,
+            tempY = point.y - pafcal.constants.TRACKER_SIZE / 2,
+            trackerX = (pafcal.constants.WIDTH - tempX) * widthRatio,
+            trackerY = tempY * heightRatio;
+        // trackerX = (point.x - pafcal.constants.TRACKER_SIZE / 2) * widthRatio,
+        // trackerY = (point.y - pafcal.constants.TRACKER_SIZE / 2) * heightRatio;
 
         tracker.style.display = "initial";
         tracker.style.left = trackerX + "px";
@@ -89,7 +126,7 @@ if (window.Worker) {
                 break;
             case 'SECOND_CLICK':
                 tracker.style.background = pafcal.constants.CLICK_COLOR;
-                tracker.style.border: "3px solid black";
+                tracker.style.border = "3px solid black";
                 break;
             default:
                 break;
@@ -100,7 +137,7 @@ if (window.Worker) {
 
     pafcal.miss = function() {
         var tracker = document.getElementById("PAFCAL_TRACKER");
-        
+
         tracker.style.display = "initial";
         tracker.style.background = pafcal.constants.MISS_COLOR;
         tracker.style.right = "30px";
@@ -113,12 +150,30 @@ if (window.Worker) {
     };
 
     pafcal.setUpCommunications = function(e) {
+        if (window._start === false) return;
         switch (e.data.type) {
+            case 'BINARY_DATA':
+                var canvas = document.getElementById("resultCanvas");
+                canvas.width = canvas.width;
+                var ctx = canvas.getContext('2d');
+                var qwer = ctx.createImageData(pafcal.constants.WIDTH, pafcal.constants.HEIGHT);
+                for (var i = 0; i < e.data.data.image.size; i++) {
+                    var point = _getPointBasedOnIndex(i, e.data.data.image),
+                        index = ((point.y + e.data.data.offset.y) * pafcal.constants.WIDTH + (point.x + e.data.data.offset.x)) * 4;
+                    qwer.data[index + 3] = 255;
+                    qwer.data[index + 1] = 255;
+                }
+                ctx.putImageData(qwer, 0, 0);
+                break;
             case 'IMAGE':
+                window._start = new Date().getTime();
+                pafcal._finalInfo.TOTAL_FRAMES_CAPTURED++;
                 _sendImage('IMAGE', worker);
                 break;
             case 'MOVE':
-                pafcal.showTracker(e.data.data.point, 'MOVE');
+                window._totalTime = new Date().getTime() - window._start;
+                pafcal._finalInfo.TOTAL_HANDS_DETECTED++;
+                pafcal.showTracker(e.data.data, 'MOVE');
                 break;
                 /*var canvas = document.getElementById("resultCanvas");
                 var ctx = canvas.getContext('2d');
@@ -145,11 +200,16 @@ if (window.Worker) {
 
                 break;
             case 'CLICK':
-                var center = pafcal.showTracker(e.data.data.point, 'CLICK');
+                window._totalTime = new Date().getTime() - window._start;
+                pafcal._finalInfo.TOTAL_CLICKS++;
+                pafcal._finalInfo.TOTAL_HANDS_DETECTED++;
+                var center = pafcal.showTracker(e.data.data, 'CLICK');
                 pafcal.click(center);
                 break;
             case 'SECOND_CLICK':
-                pafcal.showTracker(e.data.data.point, 'SECOND_CLICK');
+                window._totalTime = new Date().getTime() - window._start;
+                pafcal._finalInfo.TOTAL_HANDS_DETECTED++;
+                pafcal.showTracker(e.data.data, 'SECOND_CLICK');
                 break;
             case 'MISS':
                 pafcal.miss();
@@ -158,6 +218,20 @@ if (window.Worker) {
                 break;
         }
     }
+
+    function _setUpControlEvents() {
+        document.onkeyup = function(event) {
+            if (event.shiftKey) {
+                if (event.keyCode === 81) {
+                    pafcal.stop();
+                }
+                if (event.keyCode === 80) {
+                    pafcal.pause();
+                }
+            }
+        }
+    }
+
 
 } else {
     throw new Error("Workers not supported in this browser!");
@@ -213,6 +287,7 @@ function _setUpRecording(worker) {
                 pafcal.video.src = vendorURL.createObjectURL(stream);
             }
             pafcal.video.play();
+            _videoStream = stream;
         },
         function(err) {
             throw new Error('Error occured when streaming video!');
@@ -249,6 +324,7 @@ function _showCountdown(worker, seconds) {
             iterations++;
             if (iterations === pafcal.constants.BACKGROUND_FRAMES) {
                 clearInterval(interval);
+                _setUpControlEvents();
                 _sendImage('FINAL_BACKGROUND_IMAGE', worker, iterations);
                 _deleteBackground();
             } else {
@@ -271,7 +347,6 @@ function _sendImage(type, worker, extra) {
         scale = Math.min(160 / pafcal.constants.WIDTH, 160 / pafcal.constants.HEIGHT),
         w = (pafcal.constants.WIDTH * scale) | 0,
         h = (pafcal.constants.HEIGHT * scale) | 0;
-    console.log("image");
     pafcal.tempCanvas.width = w;
     pafcal.tempCanvas.height = h;
 

@@ -39,13 +39,13 @@ function printSparseImage(width, height, image, context) {
     console.log("print");
 }
 
-function backgroundThreshold(threshold, backgroundPixel, imagePixel) {
-    //return true if the selected pixel is FOREGROUND
-    if (Math.abs(backgroundPixel.red - imagePixel.red) < threshold) return false;
-    if (Math.abs(backgroundPixel.blue - imagePixel.blue) < threshold) return false;
-    if (Math.abs(backgroundPixel.green - imagePixel.green) < threshold) return false;
-    return true;
-}
+function _backgroundThreshold(threshold, backgroundPixel, imagePixel) {
+
+    if (Math.abs(backgroundPixel.red - imagePixel.red) > threshold || Math.abs(backgroundPixel.blue - imagePixel.blue) > threshold || Math.abs(backgroundPixel.green - imagePixel.green) > threshold) {
+        return true
+    };
+    return false;
+};
 
 function isValueInRange(value, range) {
     for (var i = 0; i < range.length; i++) {

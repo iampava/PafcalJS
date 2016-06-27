@@ -60,13 +60,18 @@ function draw_faces(ctx, rects, sc, max) {
         })
     }
     if (rects.length === 0) return null;
+    rects[0];
+    var n = max || on;
+    n = Math.min(n, on);
+    var r;
+    ctx.strokeStyle="red";
+    ctx.lineWidth="5";
+
+    for (var i = 0; i < n; ++i) {
+        r = rects[i];
+        ctx.strokeRect((r.x * sc) | 0, (r.y * sc) | 0, (r.width * sc) | 0, (r.height * sc) | 0);
+    }
+
     return new Rectangle(new Point(rects[0].x * sc | 0, rects[0].y * sc | 0), rects[0].width * sc | 0, rects[0].height * sc | 0);
-    // rects[0];
-    // var n = max || on;
-    // n = Math.min(n, on);
-    // var r;
-    // for (var i = 0; i < n; ++i) {
-    //     r = rects[i];
-    //     ctx.strokeRect((r.x * sc) | 0, (r.y * sc) | 0, (r.width * sc) | 0, (r.height * sc) | 0);
-    // }
+
 }

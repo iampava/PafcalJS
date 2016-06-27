@@ -102,7 +102,7 @@ function _binaryImageFromImage(width, height, imageData) {
     var binaryImage = new BinaryImage(width, height);
     for (var i = 0; i < imageData.length; i += 4) {
         var rowIndex = Math.floor((i / 4) / width),
-            logic = (imageData[i] === 255) ? 0 : 1;
+            logic = (imageData[i + 1] === 255) ? 0 : 1;
         binaryImage.data[rowIndex].push(logic);
     }
     return binaryImage;
@@ -135,78 +135,6 @@ function noiseReductionTest() {
     img.src = '../images/test.png'; // Set source path
 }
 
-function testConectedComponentsDeletion() {
-    var image = new BinaryImage(5, 5);
-    image.data = [
-        [1, 1, 1, 0, 1],
-        [0, 0, 1, 0, 1],
-        [1, 0, 0, 0, 1],
-        [1, 1, 1, 0, 0],
-        [0, 0, 0, 0, 1]
-    ];
-    console.log(deleteConectedComponents(image, 4));
-}
-
-function testSparseBinaryImage() {
-    var image = new SparseBinaryImage(3);
-    image.add(0, 0);
-    image.add(0, 2);
-    image.add(0, 4);
-
-    image.add(1, 1);
-    image.add(1, 3);
-    image.add(1, 5);
-
-    image.add(2, 0);
-    image.add(2, 1);
-    image.add(2, 2);
-    image.add(2, 3);
-    image.add(2, 4);
-    image.add(2, 5);
-
-    console.log(deleteConectedComponents(6, 3, image, 0));
-}
-
-function testSparseImageTest() {
-    var destinationContext = document.getElementById('resultCanvas').getContext('2d');
-    var image = new SparseBinaryImage(3);
-    image.add(0, 0);
-    image.add(0, 1);
-    image.add(0, 2);
-    image.add(0, 3);
-    image.add(0, 4);
-    image.add(0, 5);
-
-    image.add(1, 0);
-    image.add(1, 1);
-    image.add(1, 2);
-    image.add(1, 3);
-    image.add(1, 4);
-    image.add(1, 5);
-
-    image.add(2, 0);
-    image.add(2, 1);
-    image.add(2, 2);
-    image.add(2, 3);
-    image.add(2, 4);
-    image.add(2, 5);
-    printSparseImage(6, 3, image, destinationContext);
-}
-
-function testSequantialDeleteConectedComponents() {
-    var image = new SparseBinaryImage(3);
-    image.add(0, 0);
-    image.add(0, 1);
-    image.add(0, 4);
-    image.add(0, 5);
-
-    image.add(1, 1);
-    image.add(1, 2);
-    image.add(1, 3);
-    image.add(1, 4);
-
-    console.log(sequantialDeleteConectedComponents(6, 3, image, 5));
-}
 
 function testContrastStreching() {
     var foregroundContext = document.getElementById('foregroundCanvas').getContext('2d'),
@@ -271,4 +199,164 @@ function testDrawImage() {
     var ctx = document.getElementById('resultCanvas').getContext('2d');
 
     printBinaryImage(600, 480, image, ctx);
+}
+
+/////////////////////////
+function testStep1() {
+    var backgroundCanvas = document.getElementById("backCanvas"),
+        imageCanvas = document.getElementById("resultCanvas"),
+        destinationCanvas = document.getElementById("videoCanvas");
+    var backCtx = backgroundCanvas.getContext("2d"),
+        ctx = imageCanvas.getContext("2d"),
+        destCtx = destinationCanvas.getContext("2d");
+
+    back = new Image();
+    back.src = "../images/background.jpg";
+    setTimeout(function() {
+        img = new Image(),
+            width = 640,
+            height = 480;
+
+        img.addEventListener("load", function() {
+            ctx.drawImage(img, 0, 0, width, height);
+            backCtx.drawImage(back, 0, 0, width, height);
+
+            var image = ctx.getImageData(0, 0, width, height)
+            var background = backCtx.getImageData(0, 0, width, height);
+            var step1 = backgroundAndSkinDetection(width, height, background, image)
+            printSparseImage(width, height, step1.sparse, destCtx);
+        }, false);
+        img.src = '../images/foreground.jpg'; // Set source path
+    }, 1000);
+
+}
+
+function testStep2() {
+    var backgroundCanvas = document.getElementById("backCanvas"),
+        imageCanvas = document.getElementById("resultCanvas"),
+        destinationCanvas = document.getElementById("videoCanvas");
+    var backCtx = backgroundCanvas.getContext("2d"),
+        ctx = imageCanvas.getContext("2d"),
+        destCtx = destinationCanvas.getContext("2d");
+
+    back = new Image();
+    back.src = "../images/background.jpg";
+    setTimeout(function() {
+        img = new Image(),
+            width = 640,
+            height = 480;
+
+        img.addEventListener("load", function() {
+            ctx.drawImage(img, 0, 0, width, height);
+            backCtx.drawImage(back, 0, 0, width, height);
+
+            var image = ctx.getImageData(0, 0, width, height)
+            var background = backCtx.getImageData(0, 0, width, height);
+            var step1 = backgroundAndSkinDetection(width, height, background, image)
+            printSparseImage(width, height, step1.sparse, destCtx);
+        }, false);
+        img.src = '../images/foreground.jpg'; // Set source path
+    }, 1000);
+}
+
+function testStep3() {
+    var backgroundCanvas = document.getElementById("backCanvas"),
+        imageCanvas = document.getElementById("resultCanvas"),
+        destinationCanvas = document.getElementById("videoCanvas");
+    var backCtx = backgroundCanvas.getContext("2d"),
+        ctx = imageCanvas.getContext("2d"),
+        destCtx = destinationCanvas.getContext("2d");
+
+    back = new Image();
+    back.src = "../images/background.jpg";
+    setTimeout(function() {
+        img = new Image(),
+            width = 640,
+            height = 480;
+
+        img.addEventListener("load", function() {
+            ctx.drawImage(img, 0, 0, width, height);
+            backCtx.drawImage(back, 0, 0, width, height);
+
+            var image = ctx.getImageData(0, 0, width, height)
+            var background = backCtx.getImageData(0, 0, width, height);
+            var faceRect = getFaceRect(width, height, imageCanvas, ctx);
+            var step1 = backgroundAndSkinDetection(width, height, background, image, faceRect)
+            printSparseImage(width, height, step1.sparse, destCtx);
+        }, false);
+        img.src = '../images/foreground.jpg'; // Set source path
+    }, 1000);
+
+}
+
+function testStep4() {
+    var backgroundCanvas = document.getElementById("backCanvas"),
+        imageCanvas = document.getElementById("resultCanvas"),
+        destinationCanvas = document.getElementById("videoCanvas");
+    var backCtx = backgroundCanvas.getContext("2d"),
+        ctx = imageCanvas.getContext("2d"),
+        destCtx = destinationCanvas.getContext("2d");
+
+    back = new Image();
+    back.src = "../images/background.jpg";
+    setTimeout(function() {
+        img = new Image(),
+            width = 640,
+            height = 480;
+
+        img.addEventListener("load", function() {
+            ctx.drawImage(img, 0, 0, width, height);
+            backCtx.drawImage(back, 0, 0, width, height);
+
+            var image = ctx.getImageData(0, 0, width, height)
+            var background = backCtx.getImageData(0, 0, width, height);
+            var faceRect = getFaceRect(width, height, imageCanvas, ctx);
+            var step1 = backgroundAndSkinDetection(width, height, background, image, faceRect)
+            var morphoElement = new FullMorphoElement(7),
+                dilationResult = null;
+
+            dilationResult = dilation(width, height, morphoElement, step1.sparse, step1.table);
+            printSparseImage(width, height, dilationResult, destCtx);
+        }, false);
+        img.src = '../images/foreground.jpg'; // Set source path
+    }, 1000);
+
+}
+
+function testStep5() {
+    var backgroundCanvas = document.getElementById("backCanvas"),
+        imageCanvas = document.getElementById("resultCanvas"),
+        destinationCanvas = document.getElementById("videoCanvas");
+    var backCtx = backgroundCanvas.getContext("2d"),
+        ctx = imageCanvas.getContext("2d"),
+        destCtx = destinationCanvas.getContext("2d");
+
+    back = new Image();
+    back.src = "../images/background.jpg";
+    setTimeout(function() {
+        img = new Image(),
+            width = 640,
+            height = 480;
+
+        img.addEventListener("load", function() {
+            ctx.drawImage(img, 0, 0, width, height);
+            backCtx.drawImage(back, 0, 0, width, height);
+
+            var image = ctx.getImageData(0, 0, width, height)
+            var background = backCtx.getImageData(0, 0, width, height);
+            var faceRect = getFaceRect(width, height, imageCanvas, ctx);
+            var step1 = backgroundAndSkinDetection(width, height, background, image, faceRect)
+            var morphoElement = new FullMorphoElement(7),
+                dilationResult = null;
+
+            dilationResult = dilation(width, height, morphoElement, step1.sparse, step1.table);
+            var componentResult = sequantialDeleteConectedComponents(dilationResult, 0);
+            if (componentResult === null) return;
+
+
+            printSparseImage(width, height, componentResult, destCtx);
+            // printSparseImage(width, height, dilationResult, destCtx);
+        }, false);
+        img.src = '../images/foreground.jpg'; // Set source path
+    }, 1000);
 }
