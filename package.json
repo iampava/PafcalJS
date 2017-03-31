@@ -1,0 +1,10 @@
+{
+  "name": "PafcalJS",
+  "scripts": {
+    "serve": "node server.js"
+  },
+  "dependencies": {
+    "connect": "3.6.0",
+    "serve-static": "1.12.1"
+  }
+}
